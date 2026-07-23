@@ -1,11 +1,23 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { loggerMiddlewareForMain } from './common/middlewares/logger.middleware';
+// import { loggerMiddlewareForMain } from './common/middlewares/logger.middleware';
+import { Logger } from 'nestjs-pino/Logger';
 // import { AuthGuard } from './common/guards/auth.guards';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true, // включаем буферизацию логов для использования с pino
+  });
+
+  // Настройка CORS для разрешения запросов с указанных источников и с определенными методами и заголовками.
+  app.enableCors({
+    origin: ['https://site.com', 'https://admin.site.com', 'http://localhost:3000'], // разрешаем запросы с указанных источников
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], // разрешаем указанные HTTP-методы в кросс-доменных запросах
+    allowedHeaders: ['Content-Type', 'Authorization'], // разрешаем указанные заголовки в кросс-доменных запросах
+    credentials: true, // разрешаем отправку куки и авторизационных заголовков при кросс-доменных запросах
+  });
+
   // Включаем  валидацию глобально чтобы не нужно было добавлять
   // декоратор @UsePipes(ValidationPipe) в каждом контроллере.
   app.useGlobalPipes(
@@ -21,11 +33,12 @@ async function bootstrap() {
   // app.useGlobalGuards(new AuthGuard());
 
   app.setGlobalPrefix('api', {
-    exclude: ['test', 'mock'],
+    exclude: ['test', 'mock', 'health'],
   }); // Устанавливаем глобальный префикс для всех маршрутов, например, все маршруты будут начинаться с /api.
   //кроме маршрутов, указанных в exclude, все остальные маршруты будут иметь префикс /api.
 
-  app.use(loggerMiddlewareForMain);
+  // app.use(loggerMiddlewareForMain);// заменил на pino
+  app.useLogger(app.get(Logger));
 
   const PORT = process.env.PORT ?? 5001;
   console.log(`✅ Server running on http://localhost:${PORT}`);

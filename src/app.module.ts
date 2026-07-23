@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { UserModule } from './user/user.module';
 import { validateEnv } from './config/validation';
+import { LoggerModule } from 'nestjs-pino';
 import defaults from './config/defaults';
 // import { LoggerMiddleware } from './common/middlewares/logger.middleware';
 
@@ -19,6 +20,54 @@ import defaults from './config/defaults';
       load: [defaults],
       validate: validateEnv,
     }),
+    // Логирование HTTP-запросов с использованием pino-pretty в режиме разработки
+    // для удобного форматирования логов в режиме разработки
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.NODE_ENV === 'development' ? 'debug' : 'info', // уровень логирования в зависимости от окружения
+        redact: ['req.headers.authorization'], // это нужно для того, чтобы скрыть авторизационный заголовок в логах
+        // указывает на способ форматирования логов, например, использование pino-pretty в режиме разработки
+        transport:
+          process.env.NODE_ENV === 'development'
+            ? {
+                targets: [
+                  {
+                    target: 'pino-pretty',
+                    level: 'debug',
+                    options: {
+                      colorize: true,
+                    },
+                  },
+                  {
+                    target: 'pino/file',
+                    level: 'info',
+                    options: {
+                      destination: './logs/app-develop.log',
+                      mkdir: true,
+                    },
+                  },
+                  {
+                    target: 'pino/file',
+                    level: 'error',
+                    options: {
+                      destination: './logs/error.log',
+                      mkdir: true,
+                    },
+                  },
+                ],
+              }
+            : {
+                target: 'pino/file',
+                level: 'info',
+                options: {
+                  destination: './logs/app.log',
+                  mkdir: true,
+                },
+              },
+        // : undefined, // при undefined логирование будет использовать стандартный формат без pino-pretty тоесть обычный JSON-формат логов
+      },
+    }),
+
     AuthModule,
     UserModule,
   ],
