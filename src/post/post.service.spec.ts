@@ -1,15 +1,15 @@
 import 'src/test-utils/mocks/generated-prisma-client.mock';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { UserService } from './user.service';
+import { PostService } from './post.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   createPrismaServiceMock,
   PrismaServiceMock,
 } from 'src/test-utils/mocks/prisma.service.mock';
 
-describe('UserService', () => {
-  let service: UserService;
+describe('PostService', () => {
+  let service: PostService;
   let prismaMock: PrismaServiceMock;
 
   beforeEach(async () => {
@@ -17,7 +17,7 @@ describe('UserService', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        UserService,
+        PostService,
         {
           provide: PrismaService,
           useValue: prismaMock,
@@ -26,36 +26,35 @@ describe('UserService', () => {
     }).compile();
 
     jest.clearAllMocks();
-    service = module.get<UserService>(UserService);
+    service = module.get<PostService>(PostService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it('should return all users', async () => {
-    const users = [
+  it('should return all posts', async () => {
+    const posts = [
       {
-        id: 'u1',
-        name: 'test-user',
-        email: 'user01@example.com',
-        role: 'GUEST',
+        id: 1,
+        title: 'Test post',
+        content: 'Content',
+        published: false,
+        authorId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
     ];
 
-    prismaMock.user.findMany.mockResolvedValue(users);
+    prismaMock.post.findMany.mockResolvedValue(posts);
 
-    await expect(service.getAllUsers()).resolves.toEqual(users);
-    expect(prismaMock.user.findMany).toHaveBeenCalledTimes(1);
+    await expect(service.getAllPosts()).resolves.toEqual(posts);
+    expect(prismaMock.post.findMany).toHaveBeenCalledTimes(1);
   });
 
-  it('should throw NotFoundException when user is missing', async () => {
-    prismaMock.user.findUnique.mockResolvedValue(null);
+  it('should throw NotFoundException when post is missing', async () => {
+    prismaMock.post.findUnique.mockResolvedValue(null);
 
-    await expect(service.getUserById('missing-id')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
+    await expect(service.getPostById(999)).rejects.toBeInstanceOf(NotFoundException);
   });
 });

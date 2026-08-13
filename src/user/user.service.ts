@@ -1,7 +1,28 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { User } from './user.interface';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { hash } from 'bcryptjs';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { Prisma } from 'generated/prisma/client';
+
+// Коэффициент сложности (cost factor) для хеширования пароля в bcrypt.
+const PASSWORD_SALT_ROUNDS = 10;
+
+// Единый безопасный набор полей для ответов API.
+// Пароль намеренно исключен, чтобы никогда не попадать в ответы клиенту.
+const userPublicSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
+
+// Публичная форма пользователя, которую возвращают сервис и контроллер.
+export type PublicUser = Prisma.UserGetPayload<{
+  select: typeof userPublicSelect;
+}>;
 
 @Injectable() // Это декоратор, который делает класс UserService доступным
 // для внедрения зависимостей в других частях приложения.
@@ -18,29 +39,19 @@ import { UpdateUserDto } from './dto/update-user.dto';
 в область видимости модуля класса, в который он внедряется;
 - экспортировать провайдера из модуля, помеченного как глобальный с помощью декоратора @Global(). */
 export class UserService {
-  private users: User[] = [
-    {
-      id: 1,
-      name: 'John Doe',
-      email: 'john.doe@example.com',
-      address: '123 Main St',
-      age: 30,
-    },
-    {
-      id: 2,
-      name: 'Jane Doe',
-      email: 'jane.doe@example.com',
-      address: '456 Elm St',
-      age: 25,
-    },
-  ];
+  constructor(private readonly prismaService: PrismaService) {}
 
-  getAllUsers(): User[] {
-    return this.users;
+  async getAllUsers(): Promise<PublicUser[]> {
+    return this.prismaService.user.findMany({
+      select: userPublicSelect,
+    });
   }
 
-  getUserById(id: string): User {
-    const user = this.users.find((user) => user.id === Number(id));
+  async getUserById(id: string): Promise<PublicUser> {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: id },
+      select: userPublicSelect,
+    });
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
     }
@@ -49,41 +60,231 @@ export class UserService {
 
   // DTO (Data Transfer Object) - это объект, который используется для передачи данных между слоями приложения.
   // В данном случае, CreateUserDto используется для передачи данных при создании нового пользователя.
-  createUser(dto: CreateUserDto): User {
-    const newId = this.users.length + 1;
-    const newUser: User = { id: newId, ...dto };
-    this.users.push(newUser);
-    return newUser;
+  async createUser(dto: CreateUserDto): Promise<PublicUser> {
+    const hashedPassword = await hash(dto.password, PASSWORD_SALT_ROUNDS);
+
+    const data = {
+      name: dto.name,
+      email: dto.email,
+      password: hashedPassword,
+    };
+
+    try {
+      const newUser = await this.prismaService.user.create({
+        data,
+        select: userPublicSelect,
+      });
+      return newUser;
+    } catch (error) {
+      // P2002 = нарушение уникального ограничения в БД (например, duplicate email).
+      // Возвращаем понятный 409 вместо "внутренней" 500 ошибки Prisma.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Пользователь с таким email уже существует');
+      }
+      throw error;
+    }
   }
 
-  updateUser(id: string, dto: UpdateUserDto): User {
-    const user = this.getUserById(id);
-    const updatedUser = { ...user, ...dto };
-    const index = this.users.findIndex((user) => user.id === Number(id));
-    console.log('index:', index);
-    this.users[index] = updatedUser;
-    return updatedUser;
+  async updateUser(id: string, dto: UpdateUserDto): Promise<PublicUser> {
+    const hashedPassword = await hash(dto.password, PASSWORD_SALT_ROUNDS);
+
+    const data = {
+      name: dto.name,
+      email: dto.email,
+      password: hashedPassword,
+    };
+
+    try {
+      const updatedUser = await this.prismaService.user.update({
+        where: { id: id },
+        data,
+        select: userPublicSelect,
+      });
+      return updatedUser;
+    } catch (error) {
+      // P2002 = попытка записать неуникальный email.
+      // Возвращаем 409 Conflict с понятным текстом для клиента.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Пользователь с таким email уже существует');
+      }
+      throw error;
+    }
   }
 
-  partialUpdateUser(id: string, dto: Partial<UpdateUserDto>): User {
-    const user = this.getUserById(id);
-    // const updatedUser = { ...user, ...dto };
-    // const index = this.users.findIndex((user) => user.id === Number(id));
-    // this.users[index] = updatedUser;
-    // return updatedUser;
+  async partialUpdateUser(id: string, dto: Partial<UpdateUserDto>): Promise<PublicUser> {
+    const data: { name?: string; email?: string; password?: string } = {};
 
-    //так  короче но осторожно с вложенными объектами или массивами
-    Object.assign(user, dto);
-    /* Как работает:
-        Мутирует target — свойства добавляются (или перезаписываются) прямо в первый переданный объект
-        Возвращает тот же target (не новый объект, если только target не примитив)
-        Поверхностное копирование (shallow copy) — вложенные объекты копируются по ссылке
-        Поддерживает несколько источников: Object.assign(target, source1, source2, source3) */
+    if (dto.name !== undefined) {
+      data.name = dto.name;
+    }
+    if (dto.email !== undefined) {
+      data.email = dto.email;
+    }
+    if (dto.password !== undefined) {
+      data.password = await hash(dto.password, PASSWORD_SALT_ROUNDS);
+    }
+
+    try {
+      const updatedUser = await this.prismaService.user.update({
+        where: { id: id },
+        data,
+        select: userPublicSelect,
+      });
+      return updatedUser;
+    } catch (error) {
+      // P2002 = попытка записать неуникальный email.
+      // Возвращаем 409 Conflict с понятным текстом для клиента.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('Пользователь с таким email уже существует');
+      }
+      throw error;
+    }
+  }
+
+  async deleteUser(id: string): Promise<PublicUser> {
+    const deletedUser = await this.prismaService.user.delete({
+      where: { id: id },
+      select: userPublicSelect,
+    });
+    return deletedUser;
+  }
+
+  async getUserProfile(userId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const user = await this.prismaService.user.findUnique({
+      where: {
+        id: userId,
+      },
+      include: {
+        // можно использовать вместо include select если нужны только определенные поля
+        profile: true,
+
+        favoritePosts: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+
+        posts: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+          skip, // пропускаем первые (page - 1) * limit записей
+          take: limit, // показываем limit(default 10) записей на странице
+        },
+      },
+    });
+
     return user;
   }
-  deleteUser(id: string): User {
-    const user = this.getUserById(id);
-    this.users = this.users.filter((user) => user.id !== Number(id));
+
+  //пример с использованием select
+  async getUserProfilePartialField(userId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const user = await this.prismaService.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        name: true,
+        // email: true, // если ненужен то не помещаем его в select
+        profile: true,
+        favoritePosts: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+        posts: {
+          select: {
+            id: true,
+            title: true,
+            createdAt: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          skip, // пропускаем первые (page - 1) * limit записей
+          take: limit, // показываем limit(default 10) записей на странице
+
+          // с помощью include можно подгружать связанные сущности, например отзывы к посту вместе с их авторами
+          include: {
+            reviews: {
+              include: {
+                author: true,
+              },
+            },
+          },
+        },
+      },
+    });
     return user;
+  }
+
+  // Если нужно еще количество всех постов пользователя
+  /**Обычно для фронтенда пагинации нужны:
+    - текущая страница
+    - лимит
+    - общее количество постов
+    - количество страниц
+
+  Тогда лучше сделать два запроса в транзакции: */
+
+  async getUserProfileWithCountPosts(userId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+    // $transaction это транзакция, которая выполняет несколько запросов к базе данных атомарно.
+    // то есть либо все запросы выполняются успешно, либо ни один из них не выполняется.
+    const [user, totalPosts] = await this.prismaService.$transaction([
+      this.prismaService.user.findUnique({
+        where: {
+          id: userId,
+        },
+        include: {
+          profile: true,
+
+          favoritePosts: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+          },
+
+          posts: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+            skip,
+            take: limit,
+          },
+        },
+      }),
+
+      this.prismaService.post.count({
+        where: {
+          authorId: userId,
+        },
+      }),
+    ]);
+
+    return {
+      ...user,
+
+      pagination: {
+        page,
+        limit,
+        total: totalPosts,
+        totalPages: Math.ceil(totalPosts / limit),
+      },
+    };
   }
 }

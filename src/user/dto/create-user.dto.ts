@@ -26,7 +26,7 @@ export class CreateUserDto {
   @IsNotEmpty() // декоратор проверяет, что значение свойства не является пустым.
   @MinLength(6) // декоратор проверяет, что длина строки не меньше 6 символов.
   @MaxLength(20) // декоратор проверяет, что длина строки не больше 20 символов.
-  @StartWith('Mr.', { message: 'Name must start with "Mr."' })
+  @StartWith('test', { message: 'Name must start with "test"' })
   name!: string;
 
   @IsString({ message: 'Email must be a string' }) // кастомное сообщение об ошибке, которое будет возвращено, если значение свойства не является строкой.
