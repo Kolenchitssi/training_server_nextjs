@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 // import { loggerMiddlewareForMain } from './common/middlewares/logger.middleware';
 import { Logger } from 'nestjs-pino/Logger';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 // import { AuthGuard } from './common/guards/auth.guards';
 
 async function bootstrap() {
@@ -12,7 +13,7 @@ async function bootstrap() {
 
   // Настройка CORS для разрешения запросов с указанных источников и с определенными методами и заголовками.
   app.enableCors({
-    origin: ['https://site.com', 'https://admin.site.com', 'http://localhost:3000'], // разрешаем запросы с указанных источников
+    origin: ['https://site.com', 'https://admin.site.com', 'http://localhost:3000'], //todo лучше через  .env  разрешаем запросы с указанных источников
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], // разрешаем указанные HTTP-методы в кросс-доменных запросах
     allowedHeaders: ['Content-Type', 'Authorization'], // разрешаем указанные заголовки в кросс-доменных запросах
     credentials: true, // разрешаем отправку куки и авторизационных заголовков при кросс-доменных запросах
@@ -38,7 +39,35 @@ async function bootstrap() {
   //кроме маршрутов, указанных в exclude, все остальные маршруты будут иметь префикс /api.
 
   // app.use(loggerMiddlewareForMain);// заменил на pino
-  app.useLogger(app.get(Logger));
+  app.useLogger(app.get(Logger)); // используем pino для логирования в приложении NestJS
+
+  // Только для development
+  if (process.env.NODE_ENV === 'development') {
+    const config = new DocumentBuilder()
+      .setTitle('My test NestJS API')
+      .setDescription('Документация API пользователей')
+      .setVersion('1.0')
+      .addTag('Test server ')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Введите JWT токен без префикса Bearer',
+        },
+        'bearer',
+      ) // Добавляем поддержку Bearer Auth в Swagger документации
+      .build();
+
+    const document = SwaggerModule.createDocument(app, config);
+    document.security = [{ bearer: [] }]; // Устанавливаем глобальную безопасность для Swagger документации с использованием Bearer Auth.
+
+    SwaggerModule.setup('api-docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true, // сохраняем авторизацию между перезагрузками страницы Swagger
+      },
+    }); // находится по url http://localhost:3001/api-docs (или соответствующему порту)
+  }
 
   const PORT = process.env.PORT ?? 5001;
   console.log(`✅ Server running on http://localhost:${PORT}`);

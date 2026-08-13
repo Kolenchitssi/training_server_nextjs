@@ -9,12 +9,15 @@ import { validateEnv } from './config/validation';
 import { LoggerModule } from 'nestjs-pino';
 import defaults from './config/defaults';
 // import { LoggerMiddleware } from './common/middlewares/logger.middleware';
+import { PrismaModule } from './prisma/prisma.module';
+import { PostModule } from './post/post.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       // чтобы читал значения из .env файла пакет @nestjs/config надо установить
       isGlobal: true,
+      expandVariables: true,
       // Use .env.test during Jest/NODE_ENV=test runs, otherwise use .env
       // envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
       load: [defaults],
@@ -24,7 +27,7 @@ import defaults from './config/defaults';
     // для удобного форматирования логов в режиме разработки
     LoggerModule.forRoot({
       pinoHttp: {
-        level: process.env.NODE_ENV === 'development' ? 'debug' : 'info', // уровень логирования в зависимости от окружения
+        level: process.env.NODE_ENV === 'development' ? 'debug' : 'info', //todo лучше через .env LOG_LEVEL уровень логирования в зависимости от окружения
         redact: ['req.headers.authorization'], // это нужно для того, чтобы скрыть авторизационный заголовок в логах
         // указывает на способ форматирования логов, например, использование pino-pretty в режиме разработки
         transport:
@@ -60,16 +63,18 @@ import defaults from './config/defaults';
                 target: 'pino/file',
                 level: 'info',
                 options: {
-                  destination: './logs/app.log',
+                  destination: './logs/app.log', // можно написать  транспорт чтобы удобно просматривать
+                  //или google analytics for azure insights
                   mkdir: true,
                 },
               },
         // : undefined, // при undefined логирование будет использовать стандартный формат без pino-pretty тоесть обычный JSON-формат логов
       },
     }),
-
+    PrismaModule,
     AuthModule,
     UserModule,
+    PostModule,
   ],
   controllers: [AppController],
   providers: [AppService],

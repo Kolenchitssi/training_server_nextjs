@@ -1,0 +1,127 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  moduleFormat    = "cjs"  // необходимо поскольку Prisma v7 по умолчанию поставляется в виде модуля ES, что несовместимо с настройкой CommonJS в NestJS
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+
+model User {
+  id    String     @default(uuid()) @id
+  email String  @unique
+  password String
+  role  Role     @default(GUEST)
+  name  String?
+
+  //one-to-one relationship between User and Profile
+  profile Profile?
+
+  // связь one-to-many (один ко многим) между User(один author) и Post(много) (posts)
+  // без имени связи, так как мы не используем поле в модели Post для связи с User
+  // но если бы мы хотели использовать поле в модели Post для связи с User, то мы могли бы указать имя связи, например: @relation("author_posts")
+  // тогда бы это выглядело так:
+  // posts Post[] @relation("author_posts")
+  posts Post[] 
+  reviews ReviewPost[]
+  
+  // связь many-to-many (многие ко многим) между User и Post (favorites)
+  // favorited_by это имя связи, которое мы указали в модели User для поля favoritePosts
+  favoritePosts Post[] @relation("favorited_by") 
+
+
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([name,email], name: "idx_user_email") // добавлен индекс на поле name и email для ускорения поиска по этим полям
+  @@map("users") // изменено имя таблицы на users в базе данных
+}
+
+model Post {
+  id        Int      @default(autoincrement()) @id
+  title     String
+  content   String?
+  published Boolean? @default(false)
+  //При использовании Prisma Migrate это поле будет синхронизироваться со схемой базы данных, однако оно не будет отображаться в Prisma Client.
+  rating    Int?     @default(0) @ignore //ignored in Prisma Client
+
+// one-to-many relationship between User(one) and Post(many) (author)
+// onDelete: Cascade означает что при удалении пользователя будут удалены все его посты
+// здесь нет необходимости указывать имя связи, так как мы не используем поле в модели User для связи с Post
+// но если бы мы хотели использовать поле в модели User для связи с Post, то мы могли бы указать имя связи, например: @relation("author_posts")
+// тогда бы это выглядело так: 
+// author User? @relation("author_posts", fields: [authorId], references: [id], onDelete: Cascade)
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorId  String?   @map("author_id")
+
+// many-to-many relationship between User and Post (favorites)
+// favorited_by это имя связи, которое мы указали в модели User для поля favoritePosts
+  favoritedBy User[] @relation("favorited_by")  
+  reviews ReviewPost[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([title], name: "idx_post_title") // добавлен индекс на поле title для ускорения поиска по этому полю
+  @@map("posts") // изменено имя таблицы на posts в базе данных
+}
+
+model Profile {
+  id     String @default(uuid()) @id
+  bio    String?
+
+  userId String @unique @map("user_id") // уникальный идентификатор пользователя, связанного с профилем именно @unique делает связь 1:1.
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade) // связь один к одному между Profile и User, при удалении пользователя будет удален и профиль   
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("profiles") // изменено имя таблицы на profiles в базе данных
+}
+
+
+model ReviewPost{
+  id        String   @default(uuid()) @id
+  content   String
+  postId    Int      @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String   @map("author_id")
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+// Один пользователь может оставить только один отзыв на один пост, поэтому мы добавляем уникальный индекс на поля authorId и postId
+  @@unique([authorId, postId], name: "unique_review_per_user_per_post") // добавлен уникальный индекс на поля authorId и postId для ограничения одного отзыва на
+
+  @@map("review_posts") // изменено имя таблицы на review_posts в базе данных
+}
+
+model ExampleIgnore {
+  id        Int      @default(autoincrement()) @id
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // При использовании Prisma Migrate эта модель будет синхронизирована со схемой базы данных, однако она не будет доступна в Prisma Client.
+  @@ignore //если мы добавим то model ExampleIgnore не будет отображаться в базе данных, но будет доступно в Prisma Client
+  @@map("example_ignore") // изменено имя таблицы на example_ignore в базе данных
+}
+
+enum Role {
+  USER
+  ADMIN
+  GUEST
+
+  @@map("roles") // изменено имя таблицы на roles в базе данных
+}
+
