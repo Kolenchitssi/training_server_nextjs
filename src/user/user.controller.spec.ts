@@ -45,4 +45,25 @@ describe('UserController', () => {
     await expect(controller.findAllUsers()).resolves.toEqual(users);
     expect(serviceMock.getAllUsers).toHaveBeenCalledTimes(1);
   });
+
+  it('should delegate getFavorites to service for current user', async () => {
+    const favoritePosts = [
+      {
+        id: 7,
+        title: 'Favorite post',
+        content: 'Content',
+        published: true,
+        authorId: 'u1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+
+    serviceMock.getUserFavorites.mockResolvedValue(favoritePosts);
+
+    await expect(
+      controller.getFavorites({ user: { id: 'u1' } } as any),
+    ).resolves.toEqual(favoritePosts);
+    expect(serviceMock.getUserFavorites).toHaveBeenCalledWith('u1');
+  });
 });

@@ -128,6 +128,92 @@ export class PostService {
     }
   }
 
+  async addPostToFavorites(userId: string, postId: number): Promise<PublicPost> {
+    // 1) Сначала проверяем, что пользователь реально существует.
+    // Важно: userId приходит из JWT-токена, а не из тела запроса, поэтому его нельзя доверять blindly.
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found`);
+    }
+
+    // 2) Проверяем, что сам пост существует.
+    // Это нужно, чтобы не попытаться связать несуществующую запись из many-to-many relation.
+    const post = await this.prismaService.post.findUnique({
+      where: { id: postId },
+      select: { id: true },
+    });
+
+    if (!post) {
+      throw new NotFoundException(`Post with id ${postId} not found`);
+    }
+
+    // 3) Prisma relation many-to-many работает через connect/disconnect.
+    // Здесь мы говорим: "свяжи этот пост с этим пользователем как избранный".
+    const favoritePost = await this.prismaService.user.update({
+      where: { id: userId },
+      data: {
+        favoritePosts: {
+          connect: { id: postId },
+        },
+      },
+      select: {
+        favoritePosts: {
+          where: { id: postId },
+          select: postPublicSelect,
+        },
+      },
+    });
+
+    // user.update(...) возвращает массив favoritePosts, поэтому берем первый элемент.
+    // Если по какой-то причине связь не создалась, выбрасываем понятную ошибку.
+    const addedPost = favoritePost.favoritePosts[0];
+
+    if (!addedPost) {
+      throw new NotFoundException(`Post with id ${postId} not found in favorites`);
+    }
+
+    return addedPost;
+  }
+
+  async removePostFromFavorites(userId: string, postId: number): Promise<PublicPost> {
+    // Сначала валидируем пользователя и пост, чтобы не удалять "пустую" связь по несуществующим данным.
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found`);
+    }
+
+    const post = await this.prismaService.post.findUnique({
+      where: { id: postId },
+      select: { id: true },
+    });
+
+    if (!post) {
+      throw new NotFoundException(`Post with id ${postId} not found`);
+    }
+
+    // Для many-to-many связи удаление выполняется через disconnect.
+    // Мы не удаляем сам пост из базы, а только разрываем связь между пользователем и этим постом.
+    await this.prismaService.user.update({
+      where: { id: userId },
+      data: {
+        favoritePosts: {
+          disconnect: { id: postId },
+        },
+      },
+    });
+
+    // Возвращаем сам пост, чтобы клиент получил актуальный объект, который только что удалили из избранного.
+    return post as PublicPost;
+  }
+
   private handlePrismaError(error: unknown, entity: 'post' | 'author'): never {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
