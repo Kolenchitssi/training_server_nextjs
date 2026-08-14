@@ -121,7 +121,55 @@ return this.postService.addPostToFavorites(req.user.id, dto.postId);
 
 Это помогает быстро находить нужный файл и поддерживать единый стиль по проекту.
 
-## 9. Keep the project consistent
+## 9. Template for a new endpoint
+
+Для каждого нового endpoint'а используем такой порядок:
+
+1. Решаем, это resource route или action route.
+   - `:id` для конкретного ресурса
+   - отдельный путь для действия (`favorite`, `like`, `archive` и т.п.)
+
+2. Создаём DTO.
+   - если входной контракт прост и понятен — отдельный DTO-файл
+   - поля должны быть валидированы через `class-validator`
+   - для Swagger добавляем `@ApiProperty` и описание на русском
+
+3. Пишем контроллер.
+   - `@UseGuards(AuthGuard)` для защищённых маршрутов
+   - `@Req() req` для текущего пользователя
+   - `@Body() dto` для входных данных
+   - `@ApiBearerAuth('bearer')` для Swagger для защищённых маршрутов
+
+4. Пишем сервис.
+   - service получает `userId` и `dto.postId`
+   - выполняет проверку существования пользователя/ресурса
+   - вызывает Prisma или другую бизнес-логику
+
+5. Добавляем Swagger docs.
+   - `@ApiOperation({ summary: '...' })`
+   - `@ApiResponse({ status: 200, description: '...' })`
+   - `@ApiBody({ type: SomeDto })`
+
+6. Добавляем тесты.
+   - проверяем, что controller вызывает сервис с нужными параметрами
+   - проверяем, что сервис работает с Prisma в реальном сценарии
+   - проверяем обработку ошибок: 404, 401, 400
+
+Пример шаблона:
+
+```ts
+@UseGuards(AuthGuard)
+@ApiBearerAuth('bearer')
+@Post('favorite')
+async addPostToFavorites(
+  @Req() req: Request & { user: { id: string } },
+  @Body() dto: AddFavoriteDto,
+) {
+  return this.postService.addPostToFavorites(req.user.id, dto.postId);
+}
+```
+
+## 10. Keep the project consistent
 
 Новые endpoints лучше писать в одном стиле:
 
@@ -129,5 +177,6 @@ return this.postService.addPostToFavorites(req.user.id, dto.postId);
 - action routes → `POST/DELETE` + DTO body
 - auth via token
 - Swagger docs for all protected endpoints
+- тесты на каждый новый endpoint
 
 This project should stay readable and predictable for junior developers.
