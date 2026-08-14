@@ -7,8 +7,11 @@ import {
   Patch,
   Post,
   Put,
+  Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
@@ -30,6 +33,48 @@ export class UserController {
   @ApiResponse({ status: 200, description: 'Список пользователей' }) // Описание ответа для Swagger
   async findAllUsers(): Promise<PublicUser[]> {
     return this.userService.getAllUsers();
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('favorites')
+  @ApiOperation({ summary: 'Получить избранные посты текущего пользователя' })
+  @ApiResponse({ status: 200, description: 'Список избранных постов' })
+  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
+  async getFavorites(
+    // Здесь мы берем id текущего пользователя из request.user.id.
+    // Это id добавляется в AuthGuard после проверки JWT, поэтому передавать его в body не нужно.
+    @Req() req: Request & { user: { id: string } },
+  ): Promise<ReturnType<UserService['getUserFavorites']>> {
+    return this.userService.getUserFavorites(req.user.id);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('profile') // результирующий маршрут GET api/user/profile
+  @ApiOperation({ summary: 'Получить профиль текущего пользователя' })
+  @ApiResponse({ status: 200, description: 'Профиль пользователя найден' })
+  @ApiResponse({ status: 404, description: 'Профиль пользователя не найден' })
+  async getProfile(
+    // декоратор @Req() извлекает объект запроса из Express и позволяет получить текущего пользователя из него.
+    @Req() req: Request & { user: { id: string } },
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ): Promise<ReturnType<UserService['getUserProfile']>> {
+    console.log('req:', req);
+    return this.userService.getUserProfile(req.user.id, Number(page), Number(limit));
+  }
+
+  // 2й вариант когда получаем профиль пользователя по его ID, а не текущего пользователя.
+  @UseGuards(AuthGuard)
+  @Get('profile/:id') // результирующий маршрут GET api/user/profile/:id
+  @ApiOperation({ summary: 'Получить профиль пользователя по ID' })
+  @ApiResponse({ status: 200, description: 'Профиль пользователя найден' })
+  @ApiResponse({ status: 404, description: 'Профиль пользователя не найден' })
+  async getUserProfileById(
+    @Param('id') id: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ): Promise<ReturnType<UserService['getUserProfile']>> {
+    return this.userService.getUserProfile(id, Number(page), Number(limit));
   }
 
   @UseGuards(AuthGuard) // Применяем guard для аутентификации только к маршруту получения пользователя по ID.

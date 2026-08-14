@@ -13,9 +13,9 @@ export class AuthService {
 
   mockLogin(): IssuedAccessToken {
     const token = createAccessToken({
-      sub: 'test-user',
-      email: 'test.user@example.com',
-      role: 'user',
+      sub: 'fbcebc6b-2864-41d1-a6e4-dc5dd3041c3d', // sub это идентификатор пользователя (user id) в JWT payload
+      email: 'testUser@example.com',
+      role: 'ADMIN',
       expiresIn: 36000,
     });
     return token;
@@ -54,7 +54,7 @@ export class AuthService {
     }
 
     return createAccessToken({
-      sub: user.id,
+      sub: user.id, //sub это идентификатор пользователя (user id) в JWT payload
       email: user.email,
       role: user.role,
     });

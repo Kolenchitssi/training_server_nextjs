@@ -19,9 +19,23 @@ const userPublicSelect = {
   updatedAt: true,
 } satisfies Prisma.UserSelect;
 
+const favoritePostSelect = {
+  id: true,
+  title: true,
+  content: true,
+  published: true,
+  authorId: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.PostSelect;
+
 // Публичная форма пользователя, которую возвращают сервис и контроллер.
 export type PublicUser = Prisma.UserGetPayload<{
   select: typeof userPublicSelect;
+}>;
+
+export type PublicFavoritePost = Prisma.PostGetPayload<{
+  select: typeof favoritePostSelect;
 }>;
 
 @Injectable() // Это декоратор, который делает класс UserService доступным
@@ -158,8 +172,32 @@ export class UserService {
     return deletedUser;
   }
 
+  async getUserFavorites(userId: string): Promise<PublicFavoritePost[]> {
+    // Здесь мы ищем пользователя по id, который пришёл из токена и уже был записан в request.user.id.
+    // После этого возвращаем только связанные посты через relation favoritePosts.
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: {
+        favoritePosts: {
+          select: favoritePostSelect,
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found`);
+    }
+
+    return user.favoritePosts;
+  }
+
   async getUserProfile(userId: string, page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
+    const safePage = Number.isFinite(Number(page)) ? Math.max(1, Number(page)) : 1;
+    const safeLimit = Number.isFinite(Number(limit)) ? Math.max(1, Number(limit)) : 10;
+    const skip = (safePage - 1) * safeLimit;
 
     const user = await this.prismaService.user.findUnique({
       where: {
@@ -180,12 +218,30 @@ export class UserService {
             createdAt: 'desc',
           },
           skip, // пропускаем первые (page - 1) * limit записей
-          take: limit, // показываем limit(default 10) записей на странице
+          take: safeLimit, // показываем limit(default 10) записей на странице
         },
       },
     });
 
-    return user;
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found`);
+    }
+
+    const totalPosts = await this.prismaService.post.count({
+      where: {
+        authorId: userId,
+      },
+    });
+
+    return {
+      ...user,
+      pagination: {
+        page: safePage,
+        limit: safeLimit,
+        total: totalPosts,
+        totalPages: Math.ceil(totalPosts / safeLimit),
+      },
+    };
   }
 
   //пример с использованием select

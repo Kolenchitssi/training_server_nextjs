@@ -58,4 +58,41 @@ describe('UserService', () => {
       NotFoundException,
     );
   });
+
+  it('should return favorite posts for current user', async () => {
+    const favoritePosts = [
+      {
+        id: 7,
+        title: 'Favorite post',
+        content: 'Content',
+        published: true,
+        authorId: 'u1',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ];
+
+    prismaMock.user.findUnique.mockResolvedValue({ favoritePosts });
+
+    await expect(service.getUserFavorites('u1')).resolves.toEqual(favoritePosts);
+    expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      select: {
+        favoritePosts: {
+          select: {
+            id: true,
+            title: true,
+            content: true,
+            published: true,
+            authorId: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+  });
 });

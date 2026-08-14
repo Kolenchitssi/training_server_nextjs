@@ -46,4 +46,44 @@ describe('PostController', () => {
     await expect(controller.findAllPosts()).resolves.toEqual(posts);
     expect(serviceMock.getAllPosts).toHaveBeenCalledTimes(1);
   });
+
+  it('should add favorite post for current user', async () => {
+    const post = {
+      id: 7,
+      title: 'Favorite post',
+      content: 'Content',
+      published: true,
+      authorId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    serviceMock.addPostToFavorites.mockResolvedValue(post);
+
+    await expect(
+      controller.addPostToFavorites({ user: { id: 'user-1' } } as any, { postId: 7 }),
+    ).resolves.toEqual(post);
+    expect(serviceMock.addPostToFavorites).toHaveBeenCalledWith('user-1', 7);
+  });
+
+  it('should remove favorite post for current user', async () => {
+    const post = {
+      id: 7,
+      title: 'Favorite post',
+      content: 'Content',
+      published: true,
+      authorId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    serviceMock.removePostFromFavorites.mockResolvedValue(post);
+
+    await expect(
+      controller.removePostFromFavorites({ user: { id: 'user-1' } } as any, {
+        postId: 7,
+      }),
+    ).resolves.toEqual(post);
+    expect(serviceMock.removePostFromFavorites).toHaveBeenCalledWith('user-1', 7);
+  });
 });
