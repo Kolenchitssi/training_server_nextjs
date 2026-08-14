@@ -61,7 +61,7 @@ describe('PostController', () => {
     serviceMock.addPostToFavorites.mockResolvedValue(post);
 
     await expect(
-      controller.addPostToFavorites({ user: { id: 'user-1' } } as any, 7),
+      controller.addPostToFavorites({ user: { id: 'user-1' } } as any, { postId: 7 }),
     ).resolves.toEqual(post);
     expect(serviceMock.addPostToFavorites).toHaveBeenCalledWith('user-1', 7);
   });
@@ -80,7 +80,9 @@ describe('PostController', () => {
     serviceMock.removePostFromFavorites.mockResolvedValue(post);
 
     await expect(
-      controller.removePostFromFavorites({ user: { id: 'user-1' } } as any, 7),
+      controller.removePostFromFavorites({ user: { id: 'user-1' } } as any, {
+        postId: 7,
+      }),
     ).resolves.toEqual(post);
     expect(serviceMock.removePostFromFavorites).toHaveBeenCalledWith('user-1', 7);
   });

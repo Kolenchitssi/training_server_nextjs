@@ -12,11 +12,18 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PostService } from './post.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
-import { AddFavoriteDto, RemoveFavoriteDto } from './dto/favorite-post.dto';
+import { AddFavoriteDto } from './dto/add-favorite.dto';
+import { RemoveFavoriteDto } from './dto/remove-favorite.dto';
 import { PublicPost } from './post.service';
 import { AuthGuard } from 'src/common/guards/auth.guards';
 
@@ -78,31 +85,34 @@ export class PostController {
   }
 
   @UseGuards(AuthGuard)
+  @ApiBearerAuth('bearer') // Этот декоратор указывает, что для доступа к этому эндпоинту требуется Bearer токен.
   @ApiOperation({ summary: 'Добавить пост в избранное' })
   @ApiResponse({ status: 200, description: 'Пост успешно добавлен в избранное' })
   @ApiResponse({ status: 404, description: 'Пост не найден' })
-  @Post(':id/favorite')
+  @ApiBody({ type: AddFavoriteDto }) // Указывает, что в body запроса ожидается объект типа AddFavoriteDto.
+  @Post('favorite')
   async addPostToFavorites(
-    // Guard уже проверил токен и положил текущего пользователя в request.user.id.
-    // Поэтому здесь можно получить id пользователя без передачи его в теле запроса.
+    // Guard уже проверил JWT и положил текущего пользователя в request.user.id.
+    // Поэтому нам не нужно передавать userId в body: мы получаем его из токена.
     @Req() req: Request & { user: { id: string } },
-    // ParseIntPipe нужен, потому что параметр в URL всегда строка: '/post/7/favorite'.
-    @Param('id', ParseIntPipe) id: number,
-    @Body() _dto: AddFavoriteDto,
+    // Важный момент: для этой операции postId передаётся в body, а не в URL.
+    // Такой стиль удобен для Swagger, validation и единообразия API.
+    @Body() dto: AddFavoriteDto,
   ): Promise<PublicPost> {
-    return this.postService.addPostToFavorites(req.user.id, id);
+    return this.postService.addPostToFavorites(req.user.id, dto.postId);
   }
 
   @UseGuards(AuthGuard)
+  @ApiBearerAuth('bearer') // Этот декоратор указывает, что для доступа к этому эндпоинту требуется Bearer токен.
   @ApiOperation({ summary: 'Удалить пост из избранного' })
   @ApiResponse({ status: 200, description: 'Пост успешно удален из избранного' })
   @ApiResponse({ status: 404, description: 'Пост не найден' })
-  @Delete(':id/favorite')
+  @ApiBody({ type: RemoveFavoriteDto })
+  @Delete('favorite')
   async removePostFromFavorites(
     @Req() req: Request & { user: { id: string } },
-    @Param('id', ParseIntPipe) id: number,
-    @Body() _dto: RemoveFavoriteDto,
+    @Body() dto: RemoveFavoriteDto,
   ): Promise<PublicPost> {
-    return this.postService.removePostFromFavorites(req.user.id, id);
+    return this.postService.removePostFromFavorites(req.user.id, dto.postId);
   }
 }
