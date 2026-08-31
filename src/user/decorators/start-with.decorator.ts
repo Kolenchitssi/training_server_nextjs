@@ -7,6 +7,7 @@ import {
 export const StartWith = (prefix: string, validationOptions?: ValidationOptions) => {
   return (object: Object, propertyName: string) => {
     registerDecorator({
+      // registerDecorator это функция из библиотеки class-validator, которая регистрирует пользовательский валидатор.
       name: 'startWith', // Это имя валидатора, которое будет использоваться в сообщениях об ошибках.
       target: object.constructor, // Это цель, к которой применяется валидатор.
       propertyName, // Это имя свойства, к которому применяется валидатор.
