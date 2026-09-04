@@ -3,17 +3,29 @@ import {
   Controller,
   Delete,
   Get,
+  HttpStatus,
   Param,
   Patch,
   Post,
+  ParseFilePipeBuilder,
   Put,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiConsumes,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -21,11 +33,75 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { AuthGuard } from 'src/common/guards/auth.guards';
 import { PublicUser } from './user.service';
 
+const uploadSizeMb = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
+// TODO: если появятся другие upload endpoint'ы, лимиты и fileType лучше вынести в files-домен (shared policy).
+const AVATAR_MAX_FILE_SIZE_BYTES =
+  (Number.isFinite(uploadSizeMb) && uploadSizeMb > 0 ? uploadSizeMb : 10) * 1024 * 1024;
+
 // @UseGuards(AuthGuard) // Применяем guard для аутентификации ко всем маршрутам контроллера.
 @ApiTags('User - Custom describe ') // Для swagger свой заголовок для группы запросов в контроллере но можно и без него
 @Controller('user') // префикс маршрута. Сontroller - это декоратор, который определяет класс как контроллер и задает базовый путь для всех маршрутов внутри него.
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  @UseGuards(AuthGuard)
+  @Get('avatar')
+  @ApiOperation({ summary: 'Получить URL аватара текущего пользователя' })
+  @ApiBearerAuth('bearer')
+  @ApiResponse({ status: 200, description: 'URL аватара получен' })
+  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
+  async getAvatar(
+    @Req() req: Request & { user: { id: string } },
+  ): Promise<{ avatarUrl: string | null }> {
+    return this.userService.getAvatar(req.user.id);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('avatar')
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      limits: {
+        fileSize: AVATAR_MAX_FILE_SIZE_BYTES,
+      },
+    }),
+  )
+  @ApiOperation({ summary: 'Загрузить аватар текущего пользователя' })
+  @ApiBearerAuth('bearer')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['avatar'],
+      properties: {
+        avatar: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Аватар успешно загружен' })
+  @ApiResponse({ status: 404, description: 'Пользователь не найден' })
+  @ApiResponse({
+    status: 422,
+    description: 'Невалидный формат файла или превышен размер',
+  })
+  async uploadAvatar(
+    @Req() req: Request & { user: { id: string } },
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addFileTypeValidator({ fileType: /^image\/(jpeg|png)$/ })
+        .addMaxSizeValidator({ maxSize: AVATAR_MAX_FILE_SIZE_BYTES })
+        .build({
+          fileIsRequired: true,
+          errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+        }),
+    )
+    avatar: any,
+  ): Promise<{ avatarUrl: string }> {
+    return this.userService.uploadAvatar(req.user.id, avatar);
+  }
+
   @Get('all') // результирующий маршрут будет GET api/user/all
   // я думал будет конфликт с маршрутом GET /user/:id но все работает, так как NestJS сначала проверяет маршруты с конкретными путями, а затем с параметрами.
   //* для swager:

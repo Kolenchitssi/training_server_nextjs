@@ -12,6 +12,7 @@ export class CreatePostDto {
   @ApiProperty({
     example: 'How to learn NestJS effectively',
     description: 'Заголовок поста',
+    type: String,
   })
   @IsString({ message: 'Title must be a string' })
   @MinLength(3, { message: 'Title must be at least 3 characters long' })
@@ -29,6 +30,7 @@ export class CreatePostDto {
   @ApiPropertyOptional({
     example: false,
     description: 'Опубликован ли пост',
+    type: Boolean,
   })
   @IsOptional()
   @IsBoolean({ message: 'Published must be a boolean value' })

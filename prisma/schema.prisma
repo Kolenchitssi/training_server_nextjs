@@ -21,6 +21,7 @@ model User {
   password String
   role  Role     @default(GUEST)
   name  String?
+  avatarPath String? @map("avatar_path")
 
   //one-to-one relationship between User and Profile
   profile Profile?
@@ -51,6 +52,7 @@ model Post {
   title     String
   content   String?
   published Boolean? @default(false)
+  imagePath String?  @map("image_path")
   //При использовании Prisma Migrate это поле будет синхронизироваться со схемой базы данных, однако оно не будет отображаться в Prisma Client.
   rating    Int?     @default(0) @ignore //ignored in Prisma Client
 
@@ -66,6 +68,7 @@ model Post {
 // many-to-many relationship between User and Post (favorites)
 // favorited_by это имя связи, которое мы указали в модели User для поля favoritePosts
   favoritedBy User[] @relation("favorited_by")  
+  images PostImage[]
   reviews ReviewPost[]
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -73,6 +76,20 @@ model Post {
 
   @@index([title], name: "idx_post_title") // добавлен индекс на поле title для ускорения поиска по этому полю
   @@map("posts") // изменено имя таблицы на posts в базе данных
+}
+
+model PostImage {
+  id String @default(uuid()) @id
+  path String
+
+  postId Int @map("post_id")
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([postId], name: "idx_post_images_post_id")
+  @@map("post_images")
 }
 
 model Profile {

@@ -61,9 +61,19 @@ describe('UserController', () => {
 
     serviceMock.getUserFavorites.mockResolvedValue(favoritePosts);
 
-    await expect(
-      controller.getFavorites({ user: { id: 'u1' } } as any),
-    ).resolves.toEqual(favoritePosts);
+    await expect(controller.getFavorites({ user: { id: 'u1' } } as any)).resolves.toEqual(
+      favoritePosts,
+    );
     expect(serviceMock.getUserFavorites).toHaveBeenCalledWith('u1');
+  });
+
+  it('should delegate getAvatar to service for current user', async () => {
+    serviceMock.getAvatar.mockResolvedValue({ avatarUrl: '/uploads/avatars/u1.jpg' });
+
+    await expect(controller.getAvatar({ user: { id: 'u1' } } as any)).resolves.toEqual({
+      avatarUrl: '/uploads/avatars/u1.jpg',
+    });
+
+    expect(serviceMock.getAvatar).toHaveBeenCalledWith('u1');
   });
 });

@@ -9,13 +9,20 @@ import {
   Post,
   Put,
   Req,
+  UnprocessableEntityException,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOperation,
+  ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -26,11 +33,91 @@ import { AddFavoriteDto } from './dto/add-favorite.dto';
 import { RemoveFavoriteDto } from './dto/remove-favorite.dto';
 import { PublicPost } from './post.service';
 import { AuthGuard } from 'src/common/guards/auth.guards';
+import type { UploadedBinaryFile } from 'src/files/storage/file-storage.types';
+
+const uploadSizeMb = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
+const POST_IMAGES_MAX_COUNT = 5;
+const POST_IMAGE_MAX_FILE_SIZE_BYTES =
+  (Number.isFinite(uploadSizeMb) && uploadSizeMb > 0 ? uploadSizeMb : 10) * 1024 * 1024;
 
 @ApiTags('Post')
 @Controller('post')
 export class PostController {
   constructor(private readonly postService: PostService) {}
+
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Загрузить картинки для своего поста' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['images'],
+      properties: {
+        images: {
+          type: 'array',
+          items: {
+            type: 'string',
+            format: 'binary',
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Картинки поста успешно загружены' })
+  @ApiResponse({ status: 403, description: 'Пост не принадлежит текущему пользователю' })
+  @ApiResponse({ status: 404, description: 'Пост не найден' })
+  @ApiResponse({
+    status: 400,
+    description: `Превышен лимит картинок у поста (максимум ${POST_IMAGES_MAX_COUNT})`,
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'Невалидный формат файла, размер или количество файлов',
+  })
+  @Post(':id/images')
+  @UseInterceptors(
+    FilesInterceptor('images', POST_IMAGES_MAX_COUNT, {
+      limits: {
+        files: POST_IMAGES_MAX_COUNT,
+        fileSize: POST_IMAGE_MAX_FILE_SIZE_BYTES,
+      },
+    }),
+  )
+  async uploadPostImages(
+    @Req() req: Request & { user: { id: string } },
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFiles() images: UploadedBinaryFile[],
+  ): Promise<{ imageUrls: string[] }> {
+    this.validatePostImages(images);
+    return this.postService.uploadPostImages(req.user.id, id, images);
+  }
+
+  private validatePostImages(images: UploadedBinaryFile[] | undefined): void {
+    if (!images || images.length === 0) {
+      throw new UnprocessableEntityException('At least one image is required');
+    }
+
+    if (images.length > POST_IMAGES_MAX_COUNT) {
+      throw new UnprocessableEntityException(
+        `Maximum ${POST_IMAGES_MAX_COUNT} images are allowed per request`,
+      );
+    }
+
+    for (const image of images) {
+      if (!/^image\/(jpeg|png)$/.test(image.mimetype)) {
+        throw new UnprocessableEntityException(
+          'Only image/jpeg and image/png files are allowed',
+        );
+      }
+
+      if (image.size > POST_IMAGE_MAX_FILE_SIZE_BYTES) {
+        throw new UnprocessableEntityException(
+          `Each image must be at most ${uploadSizeMb}MB`,
+        );
+      }
+    }
+  }
 
   @ApiOperation({ summary: 'Создать новый пост' })
   @ApiResponse({ status: 201, description: 'Пост успешно создан' })
@@ -41,6 +128,21 @@ export class PostController {
 
   @ApiOperation({ summary: 'Получить все посты' })
   @ApiResponse({ status: 200, description: 'Список постов' })
+  // @ApiQuery используется для описания параметров запроса, которые передаются в URL после знака вопроса (например, ?page=1&limit=10).
+  // В данном случае мы описываем два параметра: page и limit, которые используются для пагинации.
+  // это как пример
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Номер страницы для пагинации (по умолчанию 1)',
+    schema: { type: 'integer', default: 1, minimum: 1 },
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Количество постов на странице (по умолчанию 10)',
+    schema: { type: 'integer', default: 10, minimum: 1, maximum: 100 },
+  })
   @Get('all')
   async findAllPosts(): Promise<PublicPost[]> {
     return this.postService.getAllPosts();
@@ -49,6 +151,9 @@ export class PostController {
   @ApiOperation({ summary: 'Получить пост по ID' })
   @ApiResponse({ status: 200, description: 'Пост найден' })
   @ApiResponse({ status: 404, description: 'Пост не найден' })
+  // По идее нужен @ApiParam, чтобы Swagger понимал, что в URL есть параметр id.
+  //* Но в Swagger уже видно поле для ввода id просто появляется надпись ID поста над полем ввода, поэтому видимо можно не указывать @ApiParam.
+  // @ApiParam({ name: 'id', type: Number, description: 'ID поста' })
   @Get(':id')
   async findPostById(@Param('id', ParseIntPipe) id: number): Promise<PublicPost> {
     return this.postService.getPostById(id);

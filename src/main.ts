@@ -1,14 +1,30 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 // import { loggerMiddlewareForMain } from './common/middlewares/logger.middleware';
 import { Logger } from 'nestjs-pino/Logger';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'node:path';
+import { TransformResponseInterceptor } from './common/interceptors/responce.interceptor';
+import { AllExceptionFilter } from './common/filters/all-exceptions.filter';
 // import { AuthGuard } from './common/guards/auth.guards';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true, // включаем буферизацию логов для использования с pino
+  });
+
+  const configService = app.get(ConfigService);
+  const fileStorageRoot =
+    configService.get<string>('FILE_STORAGE_LOCAL_ROOT') ?? 'uploads';
+  const fileStoragePublicPrefix =
+    configService.get<string>('FILE_STORAGE_PUBLIC_BASE_PATH') ?? '/uploads';
+
+  // Раздаем файлы как статику из локальной папки хранения.
+  app.useStaticAssets(join(process.cwd(), fileStorageRoot), {
+    prefix: `${fileStoragePublicPrefix.replace(/\/+$/, '')}/`,
   });
 
   // Настройка CORS для разрешения запросов с указанных источников и с определенными методами и заголовками.
@@ -30,8 +46,20 @@ async function bootstrap() {
     }),
   );
 
+  // Включаем глобальный интерцептор для преобразования всех ответов в единый формат.
+  // app.useGlobalInterceptors(new TransformResponseInterceptor()); // 1 вариант, но лучше использовать DI-вариант, чтобы Nest создавал интерцептор как провайдер со всеми зависимостями.
+  // Используем DI-вариант: так Nest создаст интерцептор как провайдер со всеми зависимостями.
+  // app.useGlobalInterceptors(app.get(TransformResponseInterceptor));
+  // Важно: строковый токен 'TransformResponseInterceptor' здесь не подойдет,
+  // потому что провайдер зарегистрирован по классу в providers AppModule.
+
+  // Включаем глобальный фильтр для обработки всех исключений в приложении.
+  app.useGlobalFilters(new AllExceptionFilter());
+  // тут также можно сделать по 2му варианту как и с интерцептором, но я оставил так, чтобы видеть возможные варианты
+  //  app.useGlobalFilters(app.get(AllExceptionFilter)); // 2 вариант, но надо зарегистрировать AllExceptionFilter в providers AppModule, чтобы Nest создавал фильтр как провайдер со всеми зависимостями.
+
   // Включаем глобальный guard для аутентификации.
-  // app.useGlobalGuards(new AuthGuard());
+  //* app.useGlobalGuards(new AuthGuard());
 
   app.setGlobalPrefix('api', {
     exclude: ['test', 'mock', 'health'],
@@ -42,6 +70,7 @@ async function bootstrap() {
   app.useLogger(app.get(Logger)); // используем pino для логирования в приложении NestJS
 
   // Только для development
+  // Настройка Swagger документации для API, доступной только в режиме разработки.
   if (process.env.NODE_ENV === 'development') {
     const config = new DocumentBuilder()
       .setTitle('My test NestJS API')
@@ -57,12 +86,31 @@ async function bootstrap() {
         },
         'bearer',
       ) // Добавляем поддержку Bearer Auth в Swagger документации
-      .build();
+      .build(); // обязяателно не забыть build
 
-    const document = SwaggerModule.createDocument(app, config);
+    const document = SwaggerModule.createDocument(app, config, {
+      //include: [AppModule], // Указываем, что документация будет генерироваться только для AppModule и его зависимостей.
+      extraModels: [], // Здесь можно указать дополнительные модели, которые не связаны напрямую с контроллерами, но должны быть включены в документацию.
+      /** дополнительные опции для генерации документации Swagger, такие как:
+        include?: Function[];
+        extraModels?: Function[];
+        ignoreGlobalPrefix?: boolean;
+        deepScanRoutes?: boolean; 
+        operationIdFactory?: OperationIdFactory;
+        linkNameFactory?: (controllerKey: string, methodKey: string, fieldKey: string) => string;
+        autoTagControllers?: boolean;
+        onlyIncludeDecoratedEndpoints?: boolean;
+        excludeDynamicDefaults?: boolean;
+        exampleMaxDepth?: number;
+       */
+    });
     document.security = [{ bearer: [] }]; // Устанавливаем глобальную безопасность для Swagger документации с использованием Bearer Auth.
 
     SwaggerModule.setup('api-docs', app, document, {
+      // api-docs - это путь, по которому будет доступна документация Swagger
+      jsonDocumentUrl: 'api-docs-json', // путь для получения JSON документации Swagger
+      yamlDocumentUrl: 'api-docs-yaml', // путь для получения YAML документации Swagger
+      customSiteTitle: 'My test NestJS API', // заголовок вкладки Swagger в браузере
       swaggerOptions: {
         persistAuthorization: true, // сохраняем авторизацию между перезагрузками страницы Swagger
       },

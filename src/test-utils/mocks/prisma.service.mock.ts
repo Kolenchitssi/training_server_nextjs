@@ -2,6 +2,7 @@ type CrudDelegateMock = {
   findMany: jest.Mock;
   findUnique: jest.Mock;
   create: jest.Mock;
+  createMany: jest.Mock;
   update: jest.Mock;
   delete: jest.Mock;
 };
@@ -9,12 +10,14 @@ type CrudDelegateMock = {
 export type PrismaServiceMock = {
   user: CrudDelegateMock;
   post: CrudDelegateMock;
+  postImage: CrudDelegateMock;
 };
 
 const createCrudDelegateMock = (): CrudDelegateMock => ({
   findMany: jest.fn(),
   findUnique: jest.fn(),
   create: jest.fn(),
+  createMany: jest.fn(),
   update: jest.fn(),
   delete: jest.fn(),
 });
@@ -22,4 +25,5 @@ const createCrudDelegateMock = (): CrudDelegateMock => ({
 export const createPrismaServiceMock = (): PrismaServiceMock => ({
   user: createCrudDelegateMock(),
   post: createCrudDelegateMock(),
+  postImage: createCrudDelegateMock(),
 });
