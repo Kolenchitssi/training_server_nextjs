@@ -54,8 +54,11 @@ async function bootstrap() {
   // потому что провайдер зарегистрирован по классу в providers AppModule.
 
   // Включаем глобальный фильтр для обработки всех исключений в приложении.
-  app.useGlobalFilters(new AllExceptionFilter());
-  // тут также можно сделать по 2му варианту как и с интерцептором, но я оставил так, чтобы видеть возможные варианты
+  //  app.useGlobalFilters(new AllExceptionFilter); // падала ошибка 500
+  // вызывался logger.error, но logger был undefined.
+  // Это происходило потому, что фильтр создавался вручную через new, без DI.
+  // Сделал по 2му варианту как и с интерцептором, но я оставил так, чтобы видеть возможные варианты
+  app.useGlobalFilters(app.get(AllExceptionFilter));
   //  app.useGlobalFilters(app.get(AllExceptionFilter)); // 2 вариант, но надо зарегистрировать AllExceptionFilter в providers AppModule, чтобы Nest создавал фильтр как провайдер со всеми зависимостями.
 
   // Включаем глобальный guard для аутентификации.

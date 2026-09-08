@@ -67,6 +67,16 @@ export class UserService {
     private readonly filesService: FilesService,
   ) {}
 
+  // Загрузка и привязка аватара к пользователю (связь One-to-One):
+  // В схеме Prisma модель User содержит скалярное поле `avatarPath String? @map("avatar_path")`.
+  // За счет того, что поле принадлежит самой таблице users, для каждого пользователя может существовать
+  // только один актуальный avatarPath (связь 1-к-1: один пользователь — один аватар).
+  // Этот метод:
+  // 1. Проверяет существование пользователя в БД и получает текущий oldAvatarPath.
+  // 2. Сохраняет файл аватара на диск через FilesService в папку uploads/avatars/<uuid>.<ext>.
+  // 3. Записывает путь к файлу (ключ) в поле avatarPath конкретного пользователя через prismaService.user.update.
+  // 4. Если запись в БД успешна — удаляет старый файл аватара (если он был), чтобы не копить мусор.
+  // 5. Если запись в БД упала с ошибкой — удаляет только что созданный новый файл (rollback).
   async uploadAvatar(
     userId: string,
     avatar: UploadedBinaryFile,

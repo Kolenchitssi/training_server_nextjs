@@ -46,7 +46,7 @@ export class PostController {
   constructor(private readonly postService: PostService) {}
 
   @UseGuards(AuthGuard)
-  @ApiBearerAuth('bearer')
+  @ApiBearerAuth('bearer') // Указываем, что маршрут требует Bearer токен для авторизации
   @ApiOperation({ summary: 'Загрузить картинки для своего поста' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -75,8 +75,15 @@ export class PostController {
     status: 422,
     description: 'Невалидный формат файла, размер или количество файлов',
   })
+  // Эндпоинт POST /api/post/:id/images:
+  // Загружает от 1 до 5 картинок к конкретному посту:
+  // 1. Проверяет авторизацию (@UseGuards(AuthGuard)), получая userId из JWT токена.
+  // 2. FilesInterceptor перехватывает файлы из поля 'images' формы multipart/form-data.
+  // 3. validatePostImages валидирует наличие файлов, лимит на запрос (до 5 шт.), mime-тип (jpeg/png) и максимальный размер.
+  // 4. Вызывает postService.uploadPostImages для проверки авторства поста, сохранения файлов и создания связей в БД (PostImage).
   @Post(':id/images')
   @UseInterceptors(
+    // используем FilesInterceptor для обработки загружаемых файлов
     FilesInterceptor('images', POST_IMAGES_MAX_COUNT, {
       limits: {
         files: POST_IMAGES_MAX_COUNT,

@@ -12,6 +12,7 @@ import defaults from './config/defaults';
 import { PrismaModule } from './prisma/prisma.module';
 import { PostModule } from './post/post.module';
 import { TransformResponseInterceptor } from './common/interceptors/responce.interceptor';
+import { AllExceptionFilter } from './common/filters/all-exceptions.filter';
 
 @Module({
   imports: [
@@ -78,8 +79,8 @@ import { TransformResponseInterceptor } from './common/interceptors/responce.int
     PostModule,
   ],
   controllers: [AppController],
-  providers: [AppService, TransformResponseInterceptor], // добавляем TransformResponseInterceptor в providers, чтобы его можно было использовать в app.module.ts
-  //! но это не сработало
+  providers: [AppService, TransformResponseInterceptor, AllExceptionFilter],
+  // добавляем TransformResponseInterceptor в providers, чтобы его можно было использовать в app.module.ts
 })
 export class AppModule {}
 

@@ -13,7 +13,7 @@ import { fileTypeFromBuffer } from 'file-type';
 import sharp from 'sharp';
 import { ImageResponse } from './image.interface';
 
-//* название Images только чтобы отличать от 2 варианта с files логичнее название с файлами
+//* название Images  чтобы отличать от 2 варианта с files
 @Injectable()
 export class ImageService {
   // для чего нужен ConfigService в этом сервисе? Он используется для доступа к конфигурации приложения,
@@ -39,9 +39,13 @@ export class ImageService {
     return result;
   }
 
-  //этот запрос будем использовать для загрузки  изображения аватара или preview
-  // и сразу изменять размер изображения, а второй метод saveImages будем использовать
-  // для загрузки изображений поста без изменения размера
+  // Метод saveImage выполняет физическую обработку и сохранение одного изображения:
+  // 1. Валидирует mime-тип изображения (image/*).
+  // 2. Делает ресайз через sharp (320x240).
+  // 3. Сохраняет файл на диск в папку uploads/<folder> (по умолчанию images-resized).
+  // ВАЖНО: Сам по себе этот метод НЕ привязывает аватар к базе данных и НЕ обновляет поле avatarPath в таблице User!
+  // Привязка аватара к конкретному пользователю (связь 1-к-1 через поле avatarPath в БД)
+  // реализована в UserService.uploadAvatar (src/user/user.service.ts) через эндпоинт POST /api/user/avatar.
   async saveImage(file: Express.Multer.File, folder?: string): Promise<ImageResponse> {
     // Проверяем тип файла, чтобы убедиться, что это изображение
     await this.validateImageType(file);
@@ -62,6 +66,14 @@ export class ImageService {
     };
   }
 
+  // Метод saveImages выполняет пакетное сохранение нескольких изображений на диск:
+  // 1. Принимает массив загруженных файлов files (Express.Multer.File[]) и опциональное имя папки.
+  // 2. Создает папку назначения (по умолчанию uploads/img), если она еще не создана.
+  // 3. Сохраняет каждый файл в исходном разрешении (без ресайза sharp) с уникальным именем на базе randomUUID().
+  // 4. Возвращает массив объектов с именем файла и относительным URL для статической отдачи.
+  // ВАЖНО: Этот метод утилитарный — он НЕ привязывает картинки к базе данных и НЕ создает связей с постами!
+  // Для сохранения картинок к конкретному посту со связью One-to-Many в таблице post_images
+  // используется специализированный метод PostService.uploadPostImages (src/post/post.service.ts).
   async saveImages(
     files: Express.Multer.File[],
     folder?: string,

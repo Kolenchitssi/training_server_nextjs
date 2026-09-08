@@ -56,6 +56,10 @@ export class UserController {
     return this.userService.getAvatar(req.user.id);
   }
 
+  // Эндпоинт POST /api/user/avatar:
+  // Принимает файл аватара авторизованного пользователя (req.user.id),
+  // передает его в UserService.uploadAvatar, где файл сохраняется в uploads/avatars/,
+  // а путь записывается в поле avatarPath модели User в БД (связь 1-к-1: у каждого пользователя свой один аватар).
   @UseGuards(AuthGuard)
   @Post('avatar')
   @UseInterceptors(
