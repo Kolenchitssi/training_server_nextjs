@@ -211,4 +211,54 @@ describe('UserService', () => {
     });
     expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('avatars/old-avatar.jpg');
   });
+
+  it('should delete user and remove avatar file from disk if present', async () => {
+    const deletedRecord = {
+      id: 'u1',
+      name: 'User 1',
+      email: 'user1@test.com',
+      role: 'GUEST' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      avatarPath: 'avatars/u1-avatar.jpg',
+    };
+
+    prismaMock.user.delete.mockResolvedValue(deletedRecord);
+    filesServiceMock.deleteFile.mockResolvedValue();
+
+    const result = await service.deleteUser('u1');
+
+    expect(result).toEqual({
+      id: 'u1',
+      name: 'User 1',
+      email: 'user1@test.com',
+      role: 'GUEST',
+      createdAt: deletedRecord.createdAt,
+      updatedAt: deletedRecord.updatedAt,
+    });
+    expect(prismaMock.user.delete).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      select: expect.objectContaining({ avatarPath: true }),
+    });
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('avatars/u1-avatar.jpg');
+  });
+
+  it('should delete user without file removal if avatar is null', async () => {
+    const deletedRecord = {
+      id: 'u2',
+      name: 'User 2',
+      email: 'user2@test.com',
+      role: 'GUEST' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      avatarPath: null,
+    };
+
+    prismaMock.user.delete.mockResolvedValue(deletedRecord);
+
+    const result = await service.deleteUser('u2');
+
+    expect(result.id).toBe('u2');
+    expect(filesServiceMock.deleteFile).not.toHaveBeenCalled();
+  });
 });

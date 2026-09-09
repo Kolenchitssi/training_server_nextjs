@@ -43,4 +43,12 @@ export class CreatePostDto {
   @IsOptional()
   @IsUUID('4', { message: 'AuthorId must be a valid UUID v4' })
   authorId?: string;
+
+  @ApiPropertyOptional({
+    example: 'posts/7-sample.jpg',
+    description: 'Относительный путь к картинке поста',
+  })
+  @IsOptional()
+  @IsString({ message: 'ImagePath must be a string' })
+  imagePath?: string;
 }

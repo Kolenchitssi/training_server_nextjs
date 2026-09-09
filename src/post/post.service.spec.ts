@@ -285,4 +285,239 @@ describe('PostService', () => {
 
     expect(filesServiceMock.saveFile).not.toHaveBeenCalled();
   });
+
+  it('should delete post and remove its associated image files from disk', async () => {
+    const deletedPost = {
+      id: 7,
+      title: 'Post to delete',
+      content: 'Content',
+      published: true,
+      imagePath: 'posts/legacy-image.jpg',
+      images: [
+        {
+          id: 'img-1',
+          path: 'posts/7-img1.jpg',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          id: 'img-2',
+          path: 'posts/7-img2.png',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      authorId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    prismaMock.post.delete.mockResolvedValue(deletedPost);
+    filesServiceMock.deleteFile.mockResolvedValue();
+
+    const result = await service.deletePost(7);
+
+    expect(result).toEqual(deletedPost);
+    expect(prismaMock.post.delete).toHaveBeenCalledWith({
+      where: { id: 7 },
+      select: expect.any(Object),
+    });
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('posts/7-img1.jpg');
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('posts/7-img2.png');
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('posts/legacy-image.jpg');
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledTimes(3);
+  });
+
+  it('should still succeed deleting post if image file removal fails', async () => {
+    const deletedPost = {
+      id: 8,
+      title: 'Post with missing image',
+      content: 'Content',
+      published: true,
+      imagePath: null,
+      images: [
+        {
+          id: 'img-1',
+          path: 'posts/8-missing.jpg',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      authorId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    prismaMock.post.delete.mockResolvedValue(deletedPost);
+    filesServiceMock.deleteFile.mockRejectedValue(
+      new Error('File not found or permission error'),
+    );
+
+    const result = await service.deletePost(8);
+
+    expect(result).toEqual(deletedPost);
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('posts/8-missing.jpg');
+  });
+
+  it('should clean removed images and old imagePath during updatePost', async () => {
+    const existingPost = {
+      id: 7,
+      imagePath: 'posts/old-main.jpg',
+      images: [
+        { id: 'img-1', path: 'posts/img1.jpg' },
+        { id: 'img-2', path: 'posts/img2.jpg' },
+      ],
+    };
+
+    prismaMock.post.findUnique.mockResolvedValue(existingPost);
+    prismaMock.postImage.deleteMany.mockResolvedValue({ count: 1 });
+    filesServiceMock.deleteFile.mockResolvedValue();
+
+    const updatedPost = {
+      id: 7,
+      title: 'Updated title',
+      content: 'New content',
+      published: true,
+      imagePath: 'posts/new-main.jpg',
+      authorId: 'user-1',
+      images: [{ id: 'img-2', path: 'posts/img2.jpg' }],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    prismaMock.post.update.mockResolvedValue(updatedPost);
+
+    const result = await service.updatePost(7, {
+      title: 'Updated title',
+      imagePath: 'posts/new-main.jpg',
+      removeImageIds: ['img-1'],
+    });
+
+    expect(result).toEqual(updatedPost);
+    expect(prismaMock.postImage.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: ['img-1'] },
+        postId: 7,
+      },
+    });
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('posts/img1.jpg');
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('posts/old-main.jpg');
+  });
+
+  it('should delete post image by id for post author', async () => {
+    const postWithImages = {
+      id: 7,
+      authorId: 'user-1',
+      images: [
+        { id: 'img-1', path: 'posts/7-img1.jpg' },
+        { id: 'img-2', path: 'posts/7-img2.jpg' },
+      ],
+    };
+
+    const finalPost = {
+      id: 7,
+      title: 'Post',
+      content: 'Content',
+      published: true,
+      imagePath: null,
+      authorId: 'user-1',
+      images: [{ id: 'img-2', path: 'posts/7-img2.jpg' }],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    prismaMock.post.findUnique
+      .mockResolvedValueOnce(postWithImages)
+      .mockResolvedValueOnce(finalPost);
+    prismaMock.postImage.delete.mockResolvedValue({ id: 'img-1' });
+    filesServiceMock.deleteFile.mockResolvedValue();
+
+    const result = await service.deletePostImage('user-1', 7, 'img-1');
+
+    expect(result).toEqual(finalPost);
+    expect(prismaMock.postImage.delete).toHaveBeenCalledWith({
+      where: { id: 'img-1' },
+    });
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('posts/7-img1.jpg');
+  });
+
+  it('should throw ForbiddenException when deleting image from another user post', async () => {
+    prismaMock.post.findUnique.mockResolvedValue({
+      id: 7,
+      authorId: 'user-2',
+      images: [{ id: 'img-1', path: 'posts/7-img1.jpg' }],
+    });
+
+    await expect(
+      service.deletePostImage('user-1', 7, 'img-1'),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(prismaMock.postImage.delete).not.toHaveBeenCalled();
+    expect(filesServiceMock.deleteFile).not.toHaveBeenCalled();
+  });
+
+  it('should replace post image, save new file and delete old file', async () => {
+    const postWithImages = {
+      id: 7,
+      authorId: 'user-1',
+      images: [{ id: 'img-1', path: 'posts/7-old.jpg' }],
+    };
+
+    prismaMock.post.findUnique.mockResolvedValue(postWithImages);
+    filesServiceMock.saveFile.mockResolvedValue({
+      key: 'posts/7-new-uuid.jpg',
+      url: '/uploads/posts/7-new-uuid.jpg',
+      mimeType: 'image/jpeg',
+      size: 2048,
+    });
+    prismaMock.postImage.update.mockResolvedValue({
+      id: 'img-1',
+      path: 'posts/7-new-uuid.jpg',
+    });
+    filesServiceMock.deleteFile.mockResolvedValue();
+
+    const result = await service.replacePostImage('user-1', 7, 'img-1', {
+      buffer: Buffer.from('new-image'),
+      mimetype: 'image/jpeg',
+      originalname: 'new.jpg',
+      size: 2048,
+    });
+
+    expect(result).toEqual({ imageUrl: '/uploads/posts/7-new-uuid.jpg' });
+    expect(prismaMock.postImage.update).toHaveBeenCalledWith({
+      where: { id: 'img-1' },
+      data: { path: 'posts/7-new-uuid.jpg' },
+    });
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('posts/7-old.jpg');
+  });
+
+  it('should rollback new file if DB update fails during replacePostImage', async () => {
+    const postWithImages = {
+      id: 7,
+      authorId: 'user-1',
+      images: [{ id: 'img-1', path: 'posts/7-old.jpg' }],
+    };
+
+    prismaMock.post.findUnique.mockResolvedValue(postWithImages);
+    filesServiceMock.saveFile.mockResolvedValue({
+      key: 'posts/7-new-uuid.jpg',
+      url: '/uploads/posts/7-new-uuid.jpg',
+      mimeType: 'image/jpeg',
+      size: 2048,
+    });
+    prismaMock.postImage.update.mockRejectedValue(new Error('DB failure'));
+    filesServiceMock.deleteFile.mockResolvedValue();
+
+    await expect(
+      service.replacePostImage('user-1', 7, 'img-1', {
+        buffer: Buffer.from('new-image'),
+        mimetype: 'image/jpeg',
+        originalname: 'new.jpg',
+        size: 2048,
+      }),
+    ).rejects.toThrow('DB failure');
+
+    expect(filesServiceMock.deleteFile).toHaveBeenCalledWith('posts/7-new-uuid.jpg');
+    expect(filesServiceMock.deleteFile).not.toHaveBeenCalledWith('posts/7-old.jpg');
+  });
 });

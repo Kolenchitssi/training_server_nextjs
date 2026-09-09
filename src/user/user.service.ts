@@ -271,12 +271,37 @@ export class UserService {
     }
   }
 
+  // Удаление пользователя и очистка аватара:
+  // 1. Сначала удаляем запись пользователя из базы данных, запрашивая поля для ответа и avatarPath.
+  // 2. Если у удаленного пользователя был avatarPath, физически удаляем файл с диска через FilesService,
+  //    чтобы не оставалось сиротских файлов.
+  // 3. Возможная ошибка удаления файла логируется и не ломает результат операции, так как в БД пользователя уже нет.
   async deleteUser(id: string): Promise<PublicUser> {
     const deletedUser = await this.prismaService.user.delete({
       where: { id: id },
-      select: userPublicSelect,
+      select: {
+        ...userPublicSelect,
+        avatarPath: true,
+      },
     });
-    return deletedUser;
+
+    if (deletedUser.avatarPath) {
+      try {
+        await this.filesService.deleteFile(deletedUser.avatarPath);
+      } catch (fileError) {
+        this.logger.warn(
+          {
+            userId: id,
+            avatarPath: deletedUser.avatarPath,
+            error: fileError,
+          },
+          'Failed to delete user avatar file after user deletion',
+        );
+      }
+    }
+
+    const { avatarPath: _avatarPath, ...publicUser } = deletedUser;
+    return publicUser;
   }
 
   async getUserFavorites(userId: string): Promise<PublicFavoritePost[]> {

@@ -5,17 +5,19 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  ParseUUIDPipe,
   Patch,
   Post,
   Put,
   Req,
   UnprocessableEntityException,
+  UploadedFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -98,6 +100,88 @@ export class PostController {
   ): Promise<{ imageUrls: string[] }> {
     this.validatePostImages(images);
     return this.postService.uploadPostImages(req.user.id, id, images);
+  }
+
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Заменить конкретную картинку поста' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['image'],
+      properties: {
+        image: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Картинка поста успешно заменена' })
+  @ApiResponse({ status: 403, description: 'Пост не принадлежит текущему пользователю' })
+  @ApiResponse({ status: 404, description: 'Пост или картинка не найдены' })
+  @ApiResponse({ status: 422, description: 'Невалидный формат файла или размер' })
+  // Эндпоинт PUT /api/post/:id/images/:imageId:
+  // Заменяет существующую картинку поста новой:
+  // 1. Проверяет авторизацию и авторство поста (authorId === req.user.id).
+  // 2. Валидирует загружаемый файл (jpeg/png, размер до MAX_UPLOAD_SIZE_MB).
+  // 3. Сохраняет новый файл на диск и обновляет path в БД (таблица post_images).
+  // 4. Удаляет старый файл с диска. При сбое БД откатывает новый файл.
+  @Put(':id/images/:imageId')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: {
+        fileSize: POST_IMAGE_MAX_FILE_SIZE_BYTES,
+      },
+    }),
+  )
+  async replacePostImage(
+    @Req() req: Request & { user: { id: string } },
+    @Param('id', ParseIntPipe) id: number,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @UploadedFile() image: UploadedBinaryFile,
+  ): Promise<{ imageUrl: string }> {
+    this.validateSinglePostImage(image);
+    return this.postService.replacePostImage(req.user.id, id, imageId, image);
+  }
+
+  @UseGuards(AuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Удалить одну картинку поста' })
+  @ApiResponse({ status: 200, description: 'Картинка успешно удалена' })
+  @ApiResponse({ status: 403, description: 'Пост не принадлежит текущему пользователю' })
+  @ApiResponse({ status: 404, description: 'Пост или картинка не найдены' })
+  // Эндпоинт DELETE /api/post/:id/images/:imageId:
+  // Удаляет конкретную картинку поста:
+  // 1. Проверяет права автора.
+  // 2. Удаляет запись PostImage из базы данных.
+  // 3. Физически удаляет файл с диска, исключая сиротские файлы.
+  @Delete(':id/images/:imageId')
+  async deletePostImage(
+    @Req() req: Request & { user: { id: string } },
+    @Param('id', ParseIntPipe) id: number,
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+  ): Promise<PublicPost> {
+    return this.postService.deletePostImage(req.user.id, id, imageId);
+  }
+
+  private validateSinglePostImage(image: UploadedBinaryFile | undefined): void {
+    if (!image) {
+      throw new UnprocessableEntityException('An image is required');
+    }
+
+    if (!/^image\/(jpeg|png)$/.test(image.mimetype)) {
+      throw new UnprocessableEntityException(
+        'Only image/jpeg and image/png files are allowed',
+      );
+    }
+
+    if (image.size > POST_IMAGE_MAX_FILE_SIZE_BYTES) {
+      throw new UnprocessableEntityException(
+        `The image must be at most ${uploadSizeMb}MB`,
+      );
+    }
   }
 
   private validatePostImages(images: UploadedBinaryFile[] | undefined): void {

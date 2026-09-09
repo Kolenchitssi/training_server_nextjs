@@ -115,4 +115,61 @@ describe('PostController', () => {
       ]),
     );
   });
+
+  it('should replace a post image for current user', async () => {
+    serviceMock.replacePostImage.mockResolvedValue({
+      imageUrl: '/uploads/posts/7-new.jpg',
+    });
+
+    const file = {
+      buffer: Buffer.from('img'),
+      mimetype: 'image/jpeg',
+      originalname: 'photo.jpg',
+      size: 1024,
+    };
+
+    await expect(
+      controller.replacePostImage(
+        { user: { id: 'user-1' } } as any,
+        7,
+        'img-uuid-1',
+        file,
+      ),
+    ).resolves.toEqual({ imageUrl: '/uploads/posts/7-new.jpg' });
+
+    expect(serviceMock.replacePostImage).toHaveBeenCalledWith(
+      'user-1',
+      7,
+      'img-uuid-1',
+      file,
+    );
+  });
+
+  it('should delete a post image for current user', async () => {
+    const post = {
+      id: 7,
+      title: 'Post',
+      content: 'Content',
+      published: true,
+      authorId: 'user-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    serviceMock.deletePostImage.mockResolvedValue(post);
+
+    await expect(
+      controller.deletePostImage(
+        { user: { id: 'user-1' } } as any,
+        7,
+        'img-uuid-1',
+      ),
+    ).resolves.toEqual(post);
+
+    expect(serviceMock.deletePostImage).toHaveBeenCalledWith(
+      'user-1',
+      7,
+      'img-uuid-1',
+    );
+  });
 });

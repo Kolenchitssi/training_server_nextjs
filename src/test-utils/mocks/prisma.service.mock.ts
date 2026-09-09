@@ -4,7 +4,9 @@ type CrudDelegateMock = {
   create: jest.Mock;
   createMany: jest.Mock;
   update: jest.Mock;
+  updateMany: jest.Mock;
   delete: jest.Mock;
+  deleteMany: jest.Mock;
 };
 
 export type PrismaServiceMock = {
@@ -19,7 +21,9 @@ const createCrudDelegateMock = (): CrudDelegateMock => ({
   create: jest.fn(),
   createMany: jest.fn(),
   update: jest.fn(),
+  updateMany: jest.fn(),
   delete: jest.fn(),
+  deleteMany: jest.fn(),
 });
 
 export const createPrismaServiceMock = (): PrismaServiceMock => ({
