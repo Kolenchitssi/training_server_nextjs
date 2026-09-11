@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UsePipes } from '@nestjs/common';
+import { Body, Controller, HttpStatus, Post, UsePipes } from '@nestjs/common';
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { StringToLowercasePipe } from 'src/common/pipes/string-to-lowercase.pipe';
@@ -19,9 +19,17 @@ export class AuthController {
     return this.authService.mockLogin();
   }
 
-  @ApiOperation({ summary: 'Логин по email и password' })
+  @ApiOperation({
+    summary: 'Логин по email и password',
+    description: 'Возвращает JWT токен при успешной авторизации',
+  })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 201, description: 'Успешная авторизация. Возвращает JWT токен' })
+  //второй вариант для статуса использовать HttpStatus.CREATED вместо 201, но в swagger будет отображаться 201, а не CREATED
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Успешная авторизация. Возвращает JWT токен',
+  })
   @ApiResponse({ status: 401, description: 'Неверные email или password' })
   @Post('login')
   async login(@Body() dto: LoginDto) {

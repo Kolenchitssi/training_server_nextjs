@@ -21,6 +21,8 @@ model User {
   password String
   role  Role     @default(GUEST)
   name  String?
+  // avatarPath хранит путь к файлу аватара пользователя (связь one-to-one: у каждого пользователя только один аватар)
+  avatarPath String? @map("avatar_path")
 
   //one-to-one relationship between User and Profile
   profile Profile?
@@ -51,6 +53,7 @@ model Post {
   title     String
   content   String?
   published Boolean? @default(false)
+  imagePath String?  @map("image_path")
   //При использовании Prisma Migrate это поле будет синхронизироваться со схемой базы данных, однако оно не будет отображаться в Prisma Client.
   rating    Int?     @default(0) @ignore //ignored in Prisma Client
 
@@ -66,6 +69,9 @@ model Post {
 // many-to-many relationship between User and Post (favorites)
 // favorited_by это имя связи, которое мы указали в модели User для поля favoritePosts
   favoritedBy User[] @relation("favorited_by")  
+
+  // связь one-to-many (один ко многим) между Post (один пост) и PostImage (до 5 картинок поста)
+  images PostImage[]
   reviews ReviewPost[]
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -73,6 +79,22 @@ model Post {
 
   @@index([title], name: "idx_post_title") // добавлен индекс на поле title для ускорения поиска по этому полю
   @@map("posts") // изменено имя таблицы на posts в базе данных
+}
+
+// Модель PostImage: хранит относительные пути к картинкам постов
+// Отношение one-to-many с Post: при удалении поста (onDelete: Cascade) связанные картинки удаляются из БД каскадно
+model PostImage {
+  id String @default(uuid()) @id
+  path String // относительный путь к файлу на диске (например: "posts/7-f4f36273-3ab8-4b6a-b495-e6df2f3678cd.jpg")
+
+  postId Int @map("post_id")
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([postId], name: "idx_post_images_post_id")
+  @@map("post_images")
 }
 
 model Profile {

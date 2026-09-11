@@ -5,6 +5,9 @@ export const createPostServiceMock = () => ({
   updatePost: jest.fn(),
   partialUpdatePost: jest.fn(),
   deletePost: jest.fn(),
+  uploadPostImages: jest.fn(),
+  replacePostImage: jest.fn(),
+  deletePostImage: jest.fn(),
   addPostToFavorites: jest.fn(),
   removePostFromFavorites: jest.fn(),
 });
@@ -17,4 +20,6 @@ export const createUserServiceMock = () => ({
   partialUpdateUser: jest.fn(),
   deleteUser: jest.fn(),
   getUserFavorites: jest.fn(),
+  getAvatar: jest.fn(),
+  uploadAvatar: jest.fn(),
 });

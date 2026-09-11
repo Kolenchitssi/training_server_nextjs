@@ -8,6 +8,10 @@ export interface Env {
   JWT_SECRET: string;
   JWT_EXPIRES_IN: string | number;
   DATABASE_URL: string;
+  FILE_STORAGE_DRIVER: 'local';
+  FILE_STORAGE_LOCAL_ROOT: string;
+  FILE_STORAGE_PUBLIC_BASE_PATH: string;
+  MAX_UPLOAD_SIZE_MB: number;
 }
 
 export default Env;

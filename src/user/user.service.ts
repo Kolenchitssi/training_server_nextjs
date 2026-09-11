@@ -1,12 +1,17 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { hash } from 'bcryptjs';
+import { randomUUID } from 'node:crypto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from 'generated/prisma/client';
+import { FilesService } from 'src/files/files.service';
+import type { UploadedBinaryFile } from 'src/files/storage/file-storage.types';
+import { Logger } from 'nestjs-pino/Logger';
 
 // Коэффициент сложности (cost factor) для хеширования пароля в bcrypt.
 const PASSWORD_SALT_ROUNDS = 10;
+const USER_AVATAR_FOLDER = 'avatars';
 
 // Единый безопасный набор полей для ответов API.
 // Пароль намеренно исключен, чтобы никогда не попадать в ответы клиенту.
@@ -53,7 +58,109 @@ export type PublicFavoritePost = Prisma.PostGetPayload<{
 в область видимости модуля класса, в который он внедряется;
 - экспортировать провайдера из модуля, помеченного как глобальный с помощью декоратора @Global(). */
 export class UserService {
-  constructor(private readonly prismaService: PrismaService) {}
+  // Используем pino-логгер через DI, чтобы логи шли в единый транспорт приложения.
+  @Inject(Logger)
+  private readonly logger!: Logger;
+
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly filesService: FilesService,
+  ) {}
+
+  // Загрузка и привязка аватара к пользователю (связь One-to-One):
+  // В схеме Prisma модель User содержит скалярное поле `avatarPath String? @map("avatar_path")`.
+  // За счет того, что поле принадлежит самой таблице users, для каждого пользователя может существовать
+  // только один актуальный avatarPath (связь 1-к-1: один пользователь — один аватар).
+  // Этот метод:
+  // 1. Проверяет существование пользователя в БД и получает текущий oldAvatarPath.
+  // 2. Сохраняет файл аватара на диск через FilesService в папку uploads/avatars/<uuid>.<ext>.
+  // 3. Записывает путь к файлу (ключ) в поле avatarPath конкретного пользователя через prismaService.user.update.
+  // 4. Если запись в БД успешна — удаляет старый файл аватара (если он был), чтобы не копить мусор.
+  // 5. Если запись в БД упала с ошибкой — удаляет только что созданный новый файл (rollback).
+  async uploadAvatar(
+    userId: string,
+    avatar: UploadedBinaryFile,
+  ): Promise<{ avatarUrl: string }> {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        avatarPath: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found`);
+    }
+
+    const oldAvatarPath = user.avatarPath;
+
+    // Физическое сохранение файла делегируем в files-домен,
+    // чтобы user-сервис не зависел от способа хранения (локально/облако).
+    // Для аватара используем UUID в имени, чтобы браузер не кешировал старую картинку
+    // по тому же URL после обновления аватара.
+    const storedAvatar = await this.filesService.saveFile({
+      buffer: avatar.buffer,
+      mimeType: avatar.mimetype,
+      folder: USER_AVATAR_FOLDER,
+      fileName: randomUUID(),
+    });
+
+    try {
+      await this.prismaService.user.update({
+        where: { id: userId },
+        data: {
+          avatarPath: storedAvatar.key,
+        },
+      });
+    } catch (error) {
+      // Если БД-обновление не удалось, удаляем уже записанный файл,
+      // чтобы не оставлять "сиротские" объекты в хранилище.
+      await this.filesService.deleteFile(storedAvatar.key);
+      throw error;
+    }
+
+    // Старый файл удаляем только после успешного обновления БД,
+    // чтобы при ошибке сохранения пользователь не остался без аватара.
+    if (oldAvatarPath && oldAvatarPath !== storedAvatar.key) {
+      try {
+        await this.filesService.deleteFile(oldAvatarPath);
+      } catch (error) {
+        // Если удаление старого файла не удалось, не откатываем успешную операцию:
+        // у пользователя уже сохранен новый avatarPath в БД.
+        this.logger.warn(
+          {
+            userId,
+            oldAvatarPath,
+            error,
+          },
+          'Failed to delete old avatar file after avatar replacement',
+        );
+      }
+    }
+
+    return {
+      avatarUrl: storedAvatar.url,
+    };
+  }
+
+  async getAvatar(userId: string): Promise<{ avatarUrl: string | null }> {
+    const user = await this.prismaService.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        avatarPath: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with id ${userId} not found`);
+    }
+
+    return {
+      avatarUrl: user.avatarPath ? this.filesService.getPublicUrl(user.avatarPath) : null,
+    };
+  }
 
   async getAllUsers(): Promise<PublicUser[]> {
     return this.prismaService.user.findMany({
@@ -164,12 +271,37 @@ export class UserService {
     }
   }
 
+  // Удаление пользователя и очистка аватара:
+  // 1. Сначала удаляем запись пользователя из базы данных, запрашивая поля для ответа и avatarPath.
+  // 2. Если у удаленного пользователя был avatarPath, физически удаляем файл с диска через FilesService,
+  //    чтобы не оставалось сиротских файлов.
+  // 3. Возможная ошибка удаления файла логируется и не ломает результат операции, так как в БД пользователя уже нет.
   async deleteUser(id: string): Promise<PublicUser> {
     const deletedUser = await this.prismaService.user.delete({
       where: { id: id },
-      select: userPublicSelect,
+      select: {
+        ...userPublicSelect,
+        avatarPath: true,
+      },
     });
-    return deletedUser;
+
+    if (deletedUser.avatarPath) {
+      try {
+        await this.filesService.deleteFile(deletedUser.avatarPath);
+      } catch (fileError) {
+        this.logger.warn(
+          {
+            userId: id,
+            avatarPath: deletedUser.avatarPath,
+            error: fileError,
+          },
+          'Failed to delete user avatar file after user deletion',
+        );
+      }
+    }
+
+    const { avatarPath: _avatarPath, ...publicUser } = deletedUser;
+    return publicUser;
   }
 
   async getUserFavorites(userId: string): Promise<PublicFavoritePost[]> {
