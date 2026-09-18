@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { hash } from 'bcryptjs';
 import { AuthService } from './auth.service';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -16,15 +17,9 @@ describe('AuthService', () => {
       update: jest.Mock;
     };
   };
-  const initialJwtSecret = process.env.JWT_SECRET;
-
-  beforeAll(() => {
-    process.env.JWT_SECRET = 'test-jwt-secret';
-  });
-
-  afterAll(() => {
-    process.env.JWT_SECRET = initialJwtSecret;
-  });
+  let configServiceMock: {
+    get: jest.Mock;
+  };
 
   beforeEach(async () => {
     prismaServiceMock = {
@@ -34,12 +29,29 @@ describe('AuthService', () => {
       },
     };
 
+    configServiceMock = {
+      get: jest.fn((key: string) => {
+        switch (key) {
+          case 'JWT_SECRET':
+            return 'test-jwt-secret';
+          case 'JWT_ACCESS_EXPIRES_IN':
+            return '24h';
+          default:
+            return undefined;
+        }
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
         {
           provide: PrismaService,
           useValue: prismaServiceMock,
+        },
+        {
+          provide: ConfigService,
+          useValue: configServiceMock,
         },
       ],
     }).compile();

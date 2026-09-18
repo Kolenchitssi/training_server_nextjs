@@ -9,6 +9,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'node:path';
 import { TransformResponseInterceptor } from './common/interceptors/responce.interceptor';
 import { AllExceptionFilter } from './common/filters/all-exceptions.filter';
+import type { Env } from './config/env';
 // import { AuthGuard } from './common/guards/auth.guards';
 
 async function bootstrap() {
@@ -16,11 +17,12 @@ async function bootstrap() {
     bufferLogs: true, // включаем буферизацию логов для использования с pino
   });
 
-  const configService = app.get(ConfigService);
+  const configService = app.get(ConfigService); // Получаем экземпляр ConfigService для доступа к переменным окружения.
   const fileStorageRoot =
     configService.get<string>('FILE_STORAGE_LOCAL_ROOT') ?? 'uploads';
   const fileStoragePublicPrefix =
     configService.get<string>('FILE_STORAGE_PUBLIC_BASE_PATH') ?? '/uploads';
+  const nodeEnv = configService.get<Env['NODE_ENV']>('NODE_ENV') ?? 'development';
 
   // Раздаем файлы как статику из локальной папки хранения.
   app.useStaticAssets(join(process.cwd(), fileStorageRoot), {
@@ -62,8 +64,9 @@ async function bootstrap() {
   //  app.useGlobalFilters(app.get(AllExceptionFilter)); // 2 вариант, но надо зарегистрировать AllExceptionFilter в providers AppModule, чтобы Nest создавал фильтр как провайдер со всеми зависимостями.
 
   // Включаем глобальный guard для аутентификации.
+  // app.useGlobalGuards(app.get(AuthGuard));
   //* app.useGlobalGuards(new AuthGuard());
-
+  // если нужно некотрые маршруты сделать без защиты Guard то их можно добавить в exclude при установке глобального префикса или использовать @Public() декоратор в контроллерах.
   app.setGlobalPrefix('api', {
     exclude: ['test', 'mock', 'health'],
   }); // Устанавливаем глобальный префикс для всех маршрутов, например, все маршруты будут начинаться с /api.
@@ -74,7 +77,7 @@ async function bootstrap() {
 
   // Только для development
   // Настройка Swagger документации для API, доступной только в режиме разработки.
-  if (process.env.NODE_ENV === 'development') {
+  if (nodeEnv === 'development') {
     const config = new DocumentBuilder()
       .setTitle('My test NestJS API')
       .setDescription('Документация API пользователей')
@@ -120,8 +123,8 @@ async function bootstrap() {
     }); // находится по url http://localhost:3001/api-docs (или соответствующему порту)
   }
 
-  const PORT = process.env.PORT ?? 5001;
-  console.log(`✅ Server running on http://localhost:${PORT}`);
-  await app.listen(PORT);
+  const port = configService.get<number>('PORT') ?? 5001;
+  console.log(`✅ Server running on http://localhost:${port}`);
+  await app.listen(port);
 }
 bootstrap(); // Запускаем приложение NestJS.

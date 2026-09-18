@@ -1,6 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { compare, hash } from 'bcryptjs';
+import type { SignOptions } from 'jsonwebtoken';
 import { createAccessToken, IssuedAccessToken } from 'src/common/utils/token';
+import type { Env } from 'src/config/env';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 
@@ -9,15 +12,33 @@ const PASSWORD_SALT_ROUNDS = 10;
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly configService: ConfigService<Env>,
+  ) {}
+
+  private getJwtSecret(): string {
+    const secret = this.configService.get<string>('JWT_SECRET');
+
+    if (!secret) {
+      throw new Error('JWT_SECRET is not configured');
+    }
+
+    return secret;
+  }
+
+  private getAccessExpiresIn(): SignOptions['expiresIn'] | undefined {
+    return this.configService.get<SignOptions['expiresIn']>('JWT_ACCESS_EXPIRES_IN');
+  }
 
   mockLogin(): IssuedAccessToken {
+    const jwtSecret = this.getJwtSecret();
     const token = createAccessToken({
       sub: 'fbcebc6b-2864-41d1-a6e4-dc5dd3041c3d', // sub это идентификатор пользователя (user id) в JWT payload
       email: 'testUser@example.com',
       role: 'ADMIN',
       expiresIn: 36000,
-    });
+    }, jwtSecret, this.getAccessExpiresIn());
     return token;
   }
 
@@ -53,10 +74,12 @@ export class AuthService {
       });
     }
 
+    const jwtSecret = this.getJwtSecret();
+
     return createAccessToken({
       sub: user.id, //sub это идентификатор пользователя (user id) в JWT payload
       email: user.email,
       role: user.role,
-    });
+    }, jwtSecret, this.getAccessExpiresIn());
   }
 }

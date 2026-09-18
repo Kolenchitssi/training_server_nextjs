@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { ImageService } from './image.service';
+import { AuthGuard } from 'src/common/guards/auth.guards';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { ImageService } from './image.service';
     }),
   ],
   controllers: [ImageController],
-  providers: [ImageService],
+  providers: [ImageService, AuthGuard],
   exports: [],
 })
 export class ImageModule {}

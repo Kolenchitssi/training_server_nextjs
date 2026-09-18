@@ -5,6 +5,7 @@ import { SaveFileInput, StoredFile } from './storage/file-storage.types';
 
 @Injectable()
 export class FilesService {
+  // здесь не совпадают имена провайдеров и токенов внедрения зависимостей, поэтому используем @Inject(FILE_STORAGE)
   constructor(@Inject(FILE_STORAGE) private readonly fileStorage: FileStorage) {}
 
   // Фасад поверх хранилища.
