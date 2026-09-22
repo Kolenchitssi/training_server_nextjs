@@ -10,6 +10,8 @@ import { AuthGuard } from 'src/common/guards/auth.guards';
   imports: [
     ConfigModule,
     // Подключаем ServeStaticModule для обслуживания статических файлов из папки uploads
+    // это динамический импорт конфигурации, который позволяет использовать  конфигурацию для настройки поведения импортируемого модуля
+    // обычно метод называют forRoot() или register()
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',

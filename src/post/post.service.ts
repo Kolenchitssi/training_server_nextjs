@@ -13,9 +13,7 @@ import { Prisma } from 'generated/prisma/client';
 import { FilesService } from 'src/files/files.service';
 import type { UploadedBinaryFile } from 'src/files/storage/file-storage.types';
 import { UserNotFoundException } from 'src/common/exceptions/user-not-found.exception';
-
-const POST_IMAGE_FOLDER = 'posts';
-const MAX_IMAGES_PER_POST = 5;
+import { POST_IMAGE_FOLDER, MAX_IMAGES_PER_POST } from './post.constants';
 
 const postImagePublicSelect = {
   id: true,

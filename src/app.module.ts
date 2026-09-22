@@ -16,9 +16,11 @@ import { PostModule } from './post/post.module';
 import { TransformResponseInterceptor } from './common/interceptors/responce.interceptor';
 import { AllExceptionFilter } from './common/filters/all-exceptions.filter';
 import { AuthGuard } from './common/guards/auth.guards';
-
+import { ScheduleModule } from '@nestjs/schedule';
 @Module({
   imports: [
+    // это динамический импорт конфигурации, который позволяет использовать  конфигурацию для настройки поведения импортируемого модуля
+    // обычно метод называют forRoot() или register()
     ConfigModule.forRoot({
       // чтобы читал значения из .env файла пакет @nestjs/config надо установить
       isGlobal: true,
@@ -101,6 +103,7 @@ import { AuthGuard } from './common/guards/auth.guards';
         };
       },
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     UserModule,
