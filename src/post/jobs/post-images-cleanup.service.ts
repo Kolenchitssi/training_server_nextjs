@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Cron, CronExpression, Interval, Timeout } from '@nestjs/schedule';
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -19,11 +19,27 @@ export class PostImagesCleanupService {
   ) {}
 
   /**
-   * Автоматический запуск раз в неделю:
-   * Воскресенье 03:00
+   * Автоматический запуск  
    */
-  @Cron('0 3 * * 0')
+  // @Cron('0 3 * * 0') // раз в неделю: Воскресенье 03:00
+  // @Cron('*/2 * * * *') // каждые 2 минуты
+  @Cron(CronExpression.EVERY_10_MINUTES) // можем использовать константы
   async handleCron(): Promise<void> {
+    console.log('Running cleanup at cron');
+    await this.cleanupOrphanImages();
+  }
+
+  // также есть Interval, можно использовать
+  @Interval(1000 * 60 * 10) // задается в миллисекундах,= каждые 10 минут
+  // метод который будет вызываться по интервалу
+  async handleInterval(): Promise<void> {
+    console.log('Running cleanup at interval');
+    await this.cleanupOrphanImages();
+  }
+
+  @Timeout(1000 * 60) // запускается один раз через 1 минуту после старта приложения
+  async handleTimeout(): Promise<void> {
+    console.log('Running cleanup at timeout');
     await this.cleanupOrphanImages();
   }
 

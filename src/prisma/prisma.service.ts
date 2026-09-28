@@ -26,6 +26,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   @Inject(Logger)
   private readonly logger!: Logger;
 
+  // onModuleInit зарезервиованый метод NestJS, который вызывается при инициализации модуля.
+  // onModuleInit срабатывает при инициализации модуля и устанавливает соединение с базой данных.
   async onModuleInit() {
     try {
       await this.$connect();
@@ -35,6 +37,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     }
   }
 
+  // onModuleDestroy зарезервиованый метод NestJS, который вызывается при уничтожении модуля.
+  // onModuleDestroy срабатывает при завершении работы модуля и закрывает соединение с базой данных.
   async onModuleDestroy() {
     try {
       await this.$disconnect();

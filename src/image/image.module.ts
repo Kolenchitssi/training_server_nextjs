@@ -14,7 +14,7 @@ import { AuthGuard } from 'src/common/guards/auth.guards';
     // обычно метод называют forRoot() или register()
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
-      serveRoot: '/uploads',
+      serveRoot: '/uploads', // URL, по которому будут доступны файлы из папки uploads
     }),
   ],
   controllers: [ImageController],

@@ -17,6 +17,10 @@ import { TransformResponseInterceptor } from './common/interceptors/responce.int
 import { AllExceptionFilter } from './common/filters/all-exceptions.filter';
 import { AuthGuard } from './common/guards/auth.guards';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ValueNotClassExampleModule } from './value-not-class-example/value-not-class-example.module';
+import { valueNotClassExampleValue } from './value-not-class-example/value-not-class-example.service';
+import { ValueClassExampleModule } from './value-class-example/value-class-example.module';
+
 @Module({
   imports: [
     // это динамический импорт конфигурации, который позволяет использовать  конфигурацию для настройки поведения импортируемого модуля
@@ -108,9 +112,29 @@ import { ScheduleModule } from '@nestjs/schedule';
     AuthModule,
     UserModule,
     PostModule,
+    ValueNotClassExampleModule,
+    ValueClassExampleModule,
   ],
   controllers: [AppController],
-  providers: [AppService, TransformResponseInterceptor, AllExceptionFilter, AuthGuard],
+  providers: [
+    AppService,
+    TransformResponseInterceptor,
+    AllExceptionFilter,
+    AuthGuard,
+    // пример импорта провайдера который просто значение и
+    // тогда мы сможем получать это значение через DI в app.service.
+    {
+      provide: 'FIRST_VALUE',
+      useValue: 'First value', // здесь мог бы быть сервис котрый возвращает значение для внедрения через DI куак в примере нижк
+    },
+    {
+      // мы задаем имя(токен) для провайдера, чтобы потом можно было его использовать через DI
+      // по этому мы можем использовать этот токен 'VALUE_NOT_CLASS_EXAMPLE' для внедрения ValueNotClassExampleService через DI в других частях приложения.
+      provide: 'VALUE_NOT_CLASS_EXAMPLE',
+      // здесь мы получаем просто значение
+      useValue: valueNotClassExampleValue,
+    },
+  ],
   // добавляем TransformResponseInterceptor в providers, чтобы его можно было использовать в app.module.ts
   // AllExceptionFilter и AuthGuard также добавлены в providers, чтобы их можно было использовать в app.module.ts через DI.
 })

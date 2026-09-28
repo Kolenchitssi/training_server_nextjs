@@ -31,9 +31,17 @@ async function bootstrap() {
 
   // Настройка CORS для разрешения запросов с указанных источников и с определенными методами и заголовками.
   app.enableCors({
-    origin: ['https://site.com', 'https://admin.site.com', 'http://localhost:3000'], //todo лучше через  .env  разрешаем запросы с указанных источников
+    // origin: ['https://site.com', 'https://admin.site.com', 'http://localhost:3000'], //todo лучше через  .env  разрешаем запросы с указанных источников
+    origin: configService.getOrThrow<string>('ALLOWED_ORIGIN').split(',') || '*',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], // разрешаем указанные HTTP-методы в кросс-доменных запросах
-    allowedHeaders: ['Content-Type', 'Authorization'], // разрешаем указанные заголовки в кросс-доменных запросах
+    exposedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'set-cookie',
+      'Cookie',
+      'Content-Disposition',
+    ], // разрешаем указанные заголовки видеть в кросс-доменных запросах остальные входящие заголовки будут скрыты
+    allowedHeaders: ['Content-Type', 'Authorization'], // разрешаем указанные заголовки отправлять в кросс-доменных запросах
     credentials: true, // разрешаем отправку куки и авторизационных заголовков при кросс-доменных запросах
   });
 
