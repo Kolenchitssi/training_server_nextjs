@@ -33,6 +33,7 @@ import { ValueClassExampleModule } from './value-class-example/value-class-examp
       // envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
       load: [defaults],
       validate: validateEnv,
+      cache: true, // Это включает кэширование значений конфигурации для повышения производительности
     }),
     // MulterModule добавили  его не потому, что без него приложение не работает,
     //  а чтобы вынести настройку загрузки файлов в конфиг.
