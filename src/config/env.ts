@@ -6,7 +6,8 @@ export interface Env {
   FRONTEND_URL: string;
   API_BASE_URL: string;
   JWT_SECRET: string;
-  JWT_EXPIRES_IN: string | number;
+  JWT_ACCESS_EXPIRES_IN: string | number;
+  JWT_REFRESH_EXPIRES_IN: string | number;
   DATABASE_URL: string;
   FILE_STORAGE_DRIVER: 'local';
   FILE_STORAGE_LOCAL_ROOT: string;

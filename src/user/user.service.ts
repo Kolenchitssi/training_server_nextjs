@@ -8,6 +8,7 @@ import { Prisma } from 'generated/prisma/client';
 import { FilesService } from 'src/files/files.service';
 import type { UploadedBinaryFile } from 'src/files/storage/file-storage.types';
 import { Logger } from 'nestjs-pino/Logger';
+import { UserNotFoundException } from 'src/common/exceptions/user-not-found.exception';
 
 // Коэффициент сложности (cost factor) для хеширования пароля в bcrypt.
 const PASSWORD_SALT_ROUNDS = 10;
@@ -356,7 +357,8 @@ export class UserService {
     });
 
     if (!user) {
-      throw new NotFoundException(`User with id ${userId} not found`);
+      // Используем кастомное исключение UserNotFoundException вместо стандартного NotFoundException
+      throw new UserNotFoundException(`User with id ${userId} not found`);
     }
 
     const totalPosts = await this.prismaService.post.count({

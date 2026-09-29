@@ -1,5 +1,6 @@
 import 'src/test-utils/mocks/generated-prisma-client.mock';
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
 import { createUserServiceMock } from 'src/test-utils/mocks/services.mock';
@@ -17,6 +18,14 @@ describe('UserController', () => {
         {
           provide: UserService,
           useValue: serviceMock,
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string) =>
+              key === 'MAX_UPLOAD_SIZE_MB' ? 10 : undefined,
+            ),
+          },
         },
       ],
     }).compile();

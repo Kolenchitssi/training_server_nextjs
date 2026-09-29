@@ -29,8 +29,7 @@ export interface IssuedAccessToken {
   expiresInSeconds?: number;
 }
 
-const getJwtSecret = (): string => {
-  const secret = process.env.JWT_SECRET;
+const getJwtSecret = (secret: string): string => {
 
   if (!secret) {
     throw new Error('JWT_SECRET is not configured');
@@ -53,9 +52,12 @@ export const getBearerToken = (authorizationHeader?: string): string | null => {
   return token;
 };
 
-export const validateAccessToken = (token: string): TokenValidationResult => {
+export const validateAccessToken = (
+  token: string,
+  tokenSecret: string,
+): TokenValidationResult => {
   try {
-    const secret = getJwtSecret();
+    const secret = getJwtSecret(tokenSecret);
     const payload = jwt.verify(token, secret) as AuthTokenPayload;
 
     const expiresAt = payload.exp ? new Date(payload.exp * 1000) : undefined;
@@ -98,10 +100,57 @@ export const validateAccessToken = (token: string): TokenValidationResult => {
 
 export const createAccessToken = (
   options: AccessTokenIssueOptions,
+  tokenSecret: string,
+  defaultExpiresIn?: SignOptions['expiresIn'],
 ): IssuedAccessToken => {
-  const secret = getJwtSecret();
-  const envExpiresIn = process.env.JWT_EXPIRES_IN as SignOptions['expiresIn'] | undefined;
-  const expiresIn: SignOptions['expiresIn'] = options.expiresIn ?? envExpiresIn ?? '1h';
+  const secret = getJwtSecret(tokenSecret);
+  const expiresIn: SignOptions['expiresIn'] =
+    options.expiresIn ?? defaultExpiresIn ?? '1h';
+
+  const payload: AuthTokenPayload = {
+    email: options.email,
+    role: options.role,
+  };
+
+  const token = jwt.sign(payload, secret, {
+    subject: options.sub,
+    expiresIn,
+  });
+
+  const decoded = jwt.decode(token) as JwtPayload | null;
+  const expiresAt = decoded?.exp ? new Date(decoded.exp * 1000) : undefined;
+  const expiresInSeconds = decoded?.exp
+    ? Math.max(0, decoded.exp - Math.floor(Date.now() / 1000))
+    : undefined;
+
+  return {
+    token,
+    expiresAt,
+    expiresInSeconds,
+  };
+};
+
+interface RefreshTokenIssueOptions {
+  email: string;
+  role: string;
+  sub?: string;
+  expiresIn?: SignOptions['expiresIn'];
+}
+
+export interface IssuedRefreshToken {
+  token: string;
+  expiresAt?: Date;
+  expiresInSeconds?: number;
+}
+
+export const createRefreshToken = (
+  options: RefreshTokenIssueOptions,
+  tokenSecret: string,
+  defaultExpiresIn?: SignOptions['expiresIn'],
+): IssuedRefreshToken => {
+  const secret = getJwtSecret(tokenSecret);
+  const expiresIn: SignOptions['expiresIn'] =
+    options.expiresIn ?? defaultExpiresIn ?? '7d';
 
   const payload: AuthTokenPayload = {
     email: options.email,

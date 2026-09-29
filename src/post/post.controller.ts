@@ -28,6 +28,8 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from 'src/config/env';
 import { PostService } from './post.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -36,16 +38,25 @@ import { RemoveFavoriteDto } from './dto/remove-favorite.dto';
 import { PublicPost } from './post.service';
 import { AuthGuard } from 'src/common/guards/auth.guards';
 import type { UploadedBinaryFile } from 'src/files/storage/file-storage.types';
+import { TypeImageException } from 'src/common/exceptions/type-image.exception';
 
-const uploadSizeMb = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
 const POST_IMAGES_MAX_COUNT = 5;
-const POST_IMAGE_MAX_FILE_SIZE_BYTES =
-  (Number.isFinite(uploadSizeMb) && uploadSizeMb > 0 ? uploadSizeMb : 10) * 1024 * 1024;
 
 @ApiTags('Post')
 @Controller('post')
 export class PostController {
-  constructor(private readonly postService: PostService) {}
+  private readonly postImageMaxFileSizeMb: number;
+  private readonly postImageMaxFileSizeBytes: number;
+
+  constructor(
+    private readonly postService: PostService,
+    private readonly configService: ConfigService<Env>,
+  ) {
+    const maxUploadSizeMb = this.configService.get<number>('MAX_UPLOAD_SIZE_MB') ?? 10;
+    this.postImageMaxFileSizeMb =
+      Number.isFinite(maxUploadSizeMb) && maxUploadSizeMb > 0 ? maxUploadSizeMb : 10;
+    this.postImageMaxFileSizeBytes = this.postImageMaxFileSizeMb * 1024 * 1024;
+  }
 
   @UseGuards(AuthGuard)
   @ApiBearerAuth('bearer') // Указываем, что маршрут требует Bearer токен для авторизации
@@ -89,7 +100,7 @@ export class PostController {
     FilesInterceptor('images', POST_IMAGES_MAX_COUNT, {
       limits: {
         files: POST_IMAGES_MAX_COUNT,
-        fileSize: POST_IMAGE_MAX_FILE_SIZE_BYTES,
+        // fileSize: POST_IMAGE_MAX_FILE_SIZE_BYTES,
       },
     }),
   )
@@ -132,7 +143,7 @@ export class PostController {
   @UseInterceptors(
     FileInterceptor('image', {
       limits: {
-        fileSize: POST_IMAGE_MAX_FILE_SIZE_BYTES,
+        // fileSize: POST_IMAGE_MAX_FILE_SIZE_BYTES,
       },
     }),
   )
@@ -172,14 +183,13 @@ export class PostController {
     }
 
     if (!/^image\/(jpeg|png)$/.test(image.mimetype)) {
-      throw new UnprocessableEntityException(
-        'Only image/jpeg and image/png files are allowed',
-      );
+      //кастомная Exception для типа изображения
+      throw new TypeImageException();
     }
 
-    if (image.size > POST_IMAGE_MAX_FILE_SIZE_BYTES) {
+    if (image.size > this.postImageMaxFileSizeBytes) {
       throw new UnprocessableEntityException(
-        `The image must be at most ${uploadSizeMb}MB`,
+        `The image must be at most ${this.postImageMaxFileSizeMb}MB`,
       );
     }
   }
@@ -197,14 +207,13 @@ export class PostController {
 
     for (const image of images) {
       if (!/^image\/(jpeg|png)$/.test(image.mimetype)) {
-        throw new UnprocessableEntityException(
-          'Only image/jpeg and image/png files are allowed',
-        );
+        //кастомная Exception для типа изображения чтобы не дублировать текст ошибки
+        throw new TypeImageException();
       }
 
-      if (image.size > POST_IMAGE_MAX_FILE_SIZE_BYTES) {
+      if (image.size > this.postImageMaxFileSizeBytes) {
         throw new UnprocessableEntityException(
-          `Each image must be at most ${uploadSizeMb}MB`,
+          `Each image must be at most ${this.postImageMaxFileSizeMb}MB`,
         );
       }
     }

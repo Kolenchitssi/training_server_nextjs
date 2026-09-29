@@ -46,9 +46,11 @@ export class CreatePostDto {
 
   @ApiPropertyOptional({
     example: 'posts/7-sample.jpg',
-    description: 'Относительный путь к картинке поста',
+    description:
+      'Legacy-поле: относительный путь к одной картинке поста (для массива изображений используйте endpoint POST /post/:id/images)',
+    nullable: true,
   })
   @IsOptional()
-  @IsString({ message: 'ImagePath must be a string' })
-  imagePath?: string;
+  @IsString({ message: 'ImagePath must be a string or null' })
+  imagePath?: string | null;
 }

@@ -4,11 +4,15 @@ import {
   UnauthorizedException,
   type CanActivate,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { type Request } from 'express';
+import type { Env } from 'src/config/env';
 import { getBearerToken, validateAccessToken } from '../utils/token';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
+  constructor(private readonly configService: ConfigService<Env>) {}
+
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest() as Request & {
       user?: { id: string };
@@ -18,8 +22,9 @@ export class AuthGuard implements CanActivate {
     // Важный момент: getBearerToken разбирает именно этот формат,
     // поэтому тут мы получаем только чистое значение JWT без слова Bearer.
     const token = getBearerToken(request.headers['authorization']);
+    const jwtSecret = this.configService.get<string>('JWT_SECRET') ?? '';
     const tokenValidationResult = token
-      ? validateAccessToken(token)
+      ? validateAccessToken(token, jwtSecret)
       : {
           isValid: false,
           payload: null,

@@ -20,5 +20,6 @@ export const loggerMiddlewareForMain = (
   next: NextFunction,
 ) => {
   console.log(`${req.method} ${req.url}`);
-  next();
+  next(); // обязателен иначе запрос не будет передан дальше по цепочке middleware
+  // и обработчиков маршрутов и запрос зависнет
 };

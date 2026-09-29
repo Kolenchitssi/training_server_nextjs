@@ -11,10 +11,13 @@ import {
   Put,
   Query,
   Req,
+  UnprocessableEntityException,
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  HttpCode,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 
@@ -32,17 +35,24 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AuthGuard } from 'src/common/guards/auth.guards';
 import { PublicUser } from './user.service';
-
-const uploadSizeMb = Number(process.env.MAX_UPLOAD_SIZE_MB ?? 10);
-// TODO: если появятся другие upload endpoint'ы, лимиты и fileType лучше вынести в files-домен (shared policy).
-const AVATAR_MAX_FILE_SIZE_BYTES =
-  (Number.isFinite(uploadSizeMb) && uploadSizeMb > 0 ? uploadSizeMb : 10) * 1024 * 1024;
+import type { Env } from 'src/config/env';
 
 // @UseGuards(AuthGuard) // Применяем guard для аутентификации ко всем маршрутам контроллера.
 @ApiTags('User - Custom describe ') // Для swagger свой заголовок для группы запросов в контроллере но можно и без него
 @Controller('user') // префикс маршрута. Сontroller - это декоратор, который определяет класс как контроллер и задает базовый путь для всех маршрутов внутри него.
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  private readonly avatarMaxFileSizeMb: number;
+  private readonly avatarMaxFileSizeBytes: number;
+
+  constructor(
+    private readonly userService: UserService,
+    private readonly configService: ConfigService<Env>,
+  ) {
+    const maxUploadSizeMb = this.configService.get<number>('MAX_UPLOAD_SIZE_MB') ?? 10;
+    this.avatarMaxFileSizeMb =
+      Number.isFinite(maxUploadSizeMb) && maxUploadSizeMb > 0 ? maxUploadSizeMb : 10;
+    this.avatarMaxFileSizeBytes = this.avatarMaxFileSizeMb * 1024 * 1024;
+  }
 
   @UseGuards(AuthGuard)
   @Get('avatar')
@@ -65,7 +75,7 @@ export class UserController {
   @UseInterceptors(
     FileInterceptor('avatar', {
       limits: {
-        fileSize: AVATAR_MAX_FILE_SIZE_BYTES,
+        // fileSize: AVATAR_MAX_FILE_SIZE_BYTES, // это уже не нужно, так как валидация выполняется вручную в validateAvatarFile
       },
     }),
   )
@@ -95,15 +105,27 @@ export class UserController {
     @UploadedFile(
       new ParseFilePipeBuilder()
         .addFileTypeValidator({ fileType: /^image\/(jpeg|png)$/ })
-        .addMaxSizeValidator({ maxSize: AVATAR_MAX_FILE_SIZE_BYTES })
         .build({
           fileIsRequired: true,
           errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
         }),
     )
-    avatar: any,
+    avatar: Express.Multer.File,
   ): Promise<{ avatarUrl: string }> {
+    this.validateAvatarFile(avatar);
     return this.userService.uploadAvatar(req.user.id, avatar);
+  }
+
+  private validateAvatarFile(avatar: Express.Multer.File | undefined): void {
+    if (!avatar) {
+      throw new UnprocessableEntityException('Avatar file is required');
+    }
+
+    if (avatar.size > this.avatarMaxFileSizeBytes) {
+      throw new UnprocessableEntityException(
+        `Avatar must be at most ${this.avatarMaxFileSizeMb}MB`,
+      );
+    }
   }
 
   @Get('all') // результирующий маршрут будет GET api/user/all
@@ -167,12 +189,14 @@ export class UserController {
     return this.userService.getUserById(id);
   }
 
+  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Создать нового пользователя' })
   @Post() // результирующий маршрут  POST api/user
   async createUser(@Body() dto: CreateUserDto): Promise<PublicUser> {
     return this.userService.createUser(dto);
   }
 
+  @HttpCode(HttpStatus.OK)
   @Put(':id') // результирующий маршрут PUT api/user/:id
   async updateUser(
     @Param('id') id: string,

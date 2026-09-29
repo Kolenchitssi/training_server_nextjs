@@ -7,7 +7,8 @@ export function validateEnv(env: Record<string, any>): Env {
   validated.NODE_ENV = (env.NODE_ENV ?? 'development') as Env['NODE_ENV'];
   validated.FRONTEND_URL = env.FRONTEND_URL ?? '';
   validated.API_BASE_URL = env.API_BASE_URL ?? '';
-  validated.JWT_EXPIRES_IN = env.JWT_EXPIRES_IN ?? '24h';
+  validated.JWT_ACCESS_EXPIRES_IN = env.JWT_ACCESS_EXPIRES_IN ?? '24h';
+  validated.JWT_REFRESH_EXPIRES_IN = env.JWT_REFRESH_EXPIRES_IN ?? '7d';
   validated.FILE_STORAGE_DRIVER = (env.FILE_STORAGE_DRIVER ??
     'local') as Env['FILE_STORAGE_DRIVER'];
   validated.FILE_STORAGE_LOCAL_ROOT = env.FILE_STORAGE_LOCAL_ROOT ?? 'uploads';

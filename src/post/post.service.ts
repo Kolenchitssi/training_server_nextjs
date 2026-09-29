@@ -12,9 +12,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { Prisma } from 'generated/prisma/client';
 import { FilesService } from 'src/files/files.service';
 import type { UploadedBinaryFile } from 'src/files/storage/file-storage.types';
-
-const POST_IMAGE_FOLDER = 'posts';
-const MAX_IMAGES_PER_POST = 5;
+import { UserNotFoundException } from 'src/common/exceptions/user-not-found.exception';
+import { POST_IMAGE_FOLDER, MAX_IMAGES_PER_POST } from './post.constants';
 
 const postImagePublicSelect = {
   id: true,
@@ -47,6 +46,12 @@ export type PublicPost = Prisma.PostGetPayload<{
 @Injectable()
 export class PostService {
   constructor(
+    // более полный способ внедрения зависимостей через конструктор
+    // как в src/files/files.service.ts
+    // с @Inject можно явно указать, какой провайдер внедрять, например:
+    // @Inject(PrismaService) private readonly prismaService: PrismaService,
+    // немного избыточно, но позволяет явно указать, какой провайдер использовать
+    // а такой вариант проще и короче, но менее явный
     private readonly prismaService: PrismaService,
     private readonly filesService: FilesService,
   ) {}
@@ -76,7 +81,7 @@ export class PostService {
       content?: string;
       published?: boolean;
       authorId?: string;
-      imagePath?: string;
+      imagePath?: string | null;
     } = {
       title: dto.title,
       content: dto.content,
@@ -420,10 +425,7 @@ export class PostService {
     try {
       await this.filesService.deleteFile(targetImage.path);
     } catch (fileError) {
-      console.error(
-        `Failed to delete post image file ${targetImage.path}:`,
-        fileError,
-      );
+      console.error(`Failed to delete post image file ${targetImage.path}:`, fileError);
     }
 
     return this.getPostById(postId);
@@ -566,7 +568,7 @@ export class PostService {
     });
 
     if (!user) {
-      throw new NotFoundException(`User with id ${userId} not found`);
+      throw new UserNotFoundException(`User with id ${userId} not found`);
     }
 
     const post = await this.prismaService.post.findUnique({
