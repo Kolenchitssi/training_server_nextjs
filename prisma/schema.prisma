@@ -139,6 +139,30 @@ model ExampleIgnore {
   @@map("example_ignore") // изменено имя таблицы на example_ignore в базе данных
 }
 
+model ChatMessage {
+  id        String   @default(uuid()) @id
+  text      String
+  // chatId    Int      @map("chat_id")
+  // chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade) // один чат может иметь много сообщений
+  authorId  String   @map("author_id")
+  // author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("chat_messages") // изменено имя таблицы на chat_messages в базе данных
+}
+
+// todo я хочу на будуще иметь несколько чатов и возможность писать в разных чатах сообщения после подключения
+/* model Chat {
+  id        Int           @default(autoincrement()) @id
+  messages  ChatMessage[] // один чат может иметь много сообщений
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@map("chats") // изменено имя таблицы на chats в базе данных
+} */
+
 enum Role {
   USER
   ADMIN
