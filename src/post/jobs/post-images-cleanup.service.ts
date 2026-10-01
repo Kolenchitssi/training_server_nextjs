@@ -23,21 +23,22 @@ export class PostImagesCleanupService {
    */
   // @Cron('0 3 * * 0') // раз в неделю: Воскресенье 03:00
   // @Cron('*/2 * * * *') // каждые 2 минуты
-  @Cron(CronExpression.EVERY_10_MINUTES) // можем использовать константы
+  // @Cron(CronExpression.EVERY_10_MINUTES) // можем использовать константы
+  @Cron(CronExpression.EVERY_11_HOURS) // можем использовать константы
   async handleCron(): Promise<void> {
     console.log('Running cleanup at cron');
     await this.cleanupOrphanImages();
   }
 
   // также есть Interval, можно использовать
-  @Interval(1000 * 60 * 10) // задается в миллисекундах,= каждые 10 минут
+  @Interval(1000 * 60 * 100) // задается в миллисекундах,= каждые 100 минут
   // метод который будет вызываться по интервалу
   async handleInterval(): Promise<void> {
     console.log('Running cleanup at interval');
     await this.cleanupOrphanImages();
   }
 
-  @Timeout(1000 * 60) // запускается один раз через 1 минуту после старта приложения
+  @Timeout(1000 * 60 * 100) // запускается один раз через 100 минут после старта приложения
   async handleTimeout(): Promise<void> {
     console.log('Running cleanup at timeout');
     await this.cleanupOrphanImages();

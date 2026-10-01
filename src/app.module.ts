@@ -20,6 +20,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ValueNotClassExampleModule } from './value-not-class-example/value-not-class-example.module';
 import { valueNotClassExampleValue } from './value-not-class-example/value-not-class-example.service';
 import { ValueClassExampleModule } from './value-class-example/value-class-example.module';
+import { ChatWebsocketModule } from './chat-websocket/chat-websocket.module';
 
 @Module({
   imports: [
@@ -115,6 +116,7 @@ import { ValueClassExampleModule } from './value-class-example/value-class-examp
     PostModule,
     ValueNotClassExampleModule,
     ValueClassExampleModule,
+    ChatWebsocketModule,
   ],
   controllers: [AppController],
   providers: [
